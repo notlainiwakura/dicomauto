@@ -1,0 +1,4 @@
+# dicomAuto
+
+DICOM automation project.
+

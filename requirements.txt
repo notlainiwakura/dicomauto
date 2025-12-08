@@ -1,0 +1,4 @@
+pytest
+pydicom
+pynetdicom
+python-dotenv

@@ -28,6 +28,37 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
+## Generating Sample DICOM Files
+
+The project includes a script to generate diverse DICOM sample files for comprehensive testing:
+
+```bash
+python create_diverse_dicom_samples.py
+```
+
+This script creates a comprehensive set of DICOM files in the `dicom_samples/` directory with descriptive filenames that indicate:
+- **Modality** (CR, CT, MR, US, PET, MG, NM)
+- **Image dimensions** (e.g., 512x512, 2048x2048)
+- **Bit depth** (8-bit, 12-bit, 14-bit, 16-bit)
+- **Photometric interpretation** (MONO1, MONO2)
+
+Example filenames:
+- `CR_512x512_12bit_MONO2.dcm` - Computed Radiography, 512x512, 12-bit, MONOCHROME2
+- `CT_512x512_16bit_MONO2.dcm` - CT scan, 512x512, 16-bit, MONOCHROME2
+- `MR_256x256_16bit_MONO1.dcm` - MRI, 256x256, 16-bit, MONOCHROME1 (inverted)
+- `US_512x512_8bit_MONO2.dcm` - Ultrasound, 512x512, 8-bit
+- `PET_128x128_16bit_MONO2.dcm` - PET scan, 128x128, 16-bit
+
+The script generates files covering:
+- 7 different modalities (CR, CT, MR, US, PET, MG, NM)
+- Multiple image sizes (from 128x128 to 4096x4096)
+- Different bit depths (8, 12, 14, 16 bits)
+- Both MONOCHROME1 and MONOCHROME2 photometric interpretations
+- Different patient IDs for routing tests
+- Small and large file variants for performance testing
+
+Note: The `dicom_samples/` directory is excluded from git (see `.gitignore`).
+
 ## Configuration
 
 The suite reads configuration primarily from environment variables or from the `.env` file in the project root.

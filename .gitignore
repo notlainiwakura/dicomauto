@@ -61,4 +61,20 @@ htmlcov/
 # Project specific
 dicom_samples/
 *.dcm
+output/
+StudyInstances_*.csv
+organized_studies/
+load_test_data/
+metadata/
+Outputs_incremental_*.csv
+FlattenedData_*.json
+dicom_elements/
+*_elements.json
+*_metadata.txt
+*_deid_verification.txt
+*_dataset_metadata.txt
+ValidationResults_*.csv
+ValidationResultDetails_*.csv
+key_to_column_mapping.json
+*.xlsx
 

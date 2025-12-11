@@ -2,3 +2,6 @@ pytest
 pydicom
 pynetdicom
 python-dotenv
+google-cloud-bigquery
+pandas
+openpyxl

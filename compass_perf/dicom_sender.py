@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Iterable, Optional
 
 from pynetdicom import AE, AllStoragePresentationContexts
-from pynetdicom.sop_class import VerificationSOPClass
+from pynetdicom.sop_class import Verification
 
 from .config import DicomEndpointConfig, LoadProfileConfig
 from .metrics import PerfMetrics, Sample
@@ -41,7 +41,7 @@ class DicomSender:
 
     def _build_ae(self) -> AE:
         ae = AE(ae_title=self.endpoint.local_ae_title.encode("ascii", "ignore"))
-        ae.requested_contexts = list(AllStoragePresentationContexts) + [VerificationSOPClass]
+        ae.requested_contexts = list(AllStoragePresentationContexts) + [Verification]
         return ae
 
     def _send_single_dataset(
@@ -158,7 +158,7 @@ class DicomSender:
         Lightweight Verification (C-ECHO) ping to check Compass reachability.
         """
         ae = self._build_ae()
-        ae.requested_contexts.append(VerificationSOPClass)
+        ae.requested_contexts.append(Verification)
         try:
             assoc = ae.associate(
                 self.endpoint.host,

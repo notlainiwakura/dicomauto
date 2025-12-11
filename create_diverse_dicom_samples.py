@@ -7,6 +7,9 @@ Usage:
 
 This will generate a comprehensive set of DICOM files in the dicom_samples/
 directory with descriptive filenames that make it easy to identify each file type.
+
+Note: After generating samples, you can use 0_dcm_read_studyids.py to catalog them
+and verify their metadata structure before running performance tests.
 """
 
 import pydicom

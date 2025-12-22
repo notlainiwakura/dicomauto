@@ -178,76 +178,81 @@ def update_dicom_file(
             update_tags_ds(ds, "SeriesInstanceUID", new_series_uid)
             print("    ✓ Unique identifier tags updated")
             
-            # Update other test tags
-            print("  Step 4: Updating test data tags...")
+            # Update other test tags using direct hex tag assignment
+            print("  Step 4: Updating test data tags (using hex tag values)...")
             
             # PatientID - (0010,0020) LO (Long String)
-            old_patient_id = getattr(ds, 'PatientID', None)
+            old_patient_id = None
+            if (0x0010, 0x0020) in ds:
+                old_patient_id = str(ds[0x0010, 0x0020].value)
             if (0x0010, 0x0020) not in ds:
                 ds.add_new((0x0010, 0x0020), 'LO', "11043207")
             else:
                 ds[0x0010, 0x0020].value = "11043207"
-            print(f"    ✓ PatientID updated: {old_patient_id} → 11043207")
+            print(f"    ✓ PatientID (0010,0020) updated: {old_patient_id} → 11043207")
             
             # PatientName - (0010,0010) PN (Person Name)
-            old_patient_name = getattr(ds, 'PatientName', None)
+            old_patient_name = None
+            if (0x0010, 0x0010) in ds:
+                old_patient_name = str(ds[0x0010, 0x0010].value)
             if (0x0010, 0x0010) not in ds:
                 ds.add_new((0x0010, 0x0010), 'PN', "ZZTESTPATIENT^MIDIA THREE")
             else:
                 ds[0x0010, 0x0010].value = "ZZTESTPATIENT^MIDIA THREE"
-            print(f"    ✓ PatientName updated: {old_patient_name} → ZZTESTPATIENT^MIDIA THREE")
+            print(f"    ✓ PatientName (0010,0010) updated: {old_patient_name} → ZZTESTPATIENT^MIDIA THREE")
             
             # PatientBirthDate - (0010,0030) DA (Date)
-            old_birth_date = getattr(ds, 'PatientBirthDate', None)
+            old_birth_date = None
+            if (0x0010, 0x0030) in ds:
+                old_birth_date = str(ds[0x0010, 0x0030].value)
             if (0x0010, 0x0030) not in ds:
                 ds.add_new((0x0010, 0x0030), 'DA', "19010101")
             else:
                 ds[0x0010, 0x0030].value = "19010101"
-            print(f"    ✓ PatientBirthDate updated: {old_birth_date} → 19010101")
+            print(f"    ✓ PatientBirthDate (0010,0030) updated: {old_birth_date} → 19010101")
             
             # InstitutionName - (0008,0080) LO (Long String)
-            old_institution = getattr(ds, 'InstitutionName', None)
+            old_institution = None
+            if (0x0008, 0x0080) in ds:
+                old_institution = str(ds[0x0008, 0x0080].value)
             if (0x0008, 0x0080) not in ds:
                 ds.add_new((0x0008, 0x0080), 'LO', "TEST FACILITY")
             else:
                 ds[0x0008, 0x0080].value = "TEST FACILITY"
-            print(f"    ✓ InstitutionName updated: {old_institution} → TEST FACILITY")
+            print(f"    ✓ InstitutionName (0008,0080) updated: {old_institution} → TEST FACILITY")
             
-            # Try ReferringPhysicianName tag (0008,0090) first, fallback to (0808,0090)
+            # ReferringPhysicianName - Try (0008,0090) first, fallback to (0808,0090)
+            old_referring_physician = None
             referring_physician_set = False
-            try:
-                if hasattr(ds, 'ReferringPhysicianName'):
-                    update_tags_ds(ds, "ReferringPhysicianName", "TEST PROVIDER")
-                    referring_physician_set = True
-                    print("    ✓ ReferringPhysicianName updated (standard tag)")
-                else:
-                    # Try to add the standard tag if it doesn't exist
-                    try:
-                        if (0x0008, 0x0090) not in ds:
-                            ds.add_new((0x0008, 0x0090), 'PN', "TEST PROVIDER")
-                        else:
-                            ds[0x0008, 0x0090].value = "TEST PROVIDER"
-                        referring_physician_set = True
-                        print("    ✓ ReferringPhysicianName updated (standard tag added)")
-                    except Exception:
-                        pass
-            except (AttributeError, KeyError, Exception):
-                pass
             
+            # Try standard tag (0008,0090) first
+            try:
+                if (0x0008, 0x0090) in ds:
+                    old_referring_physician = str(ds[0x0008, 0x0090].value)
+                    ds[0x0008, 0x0090].value = "TEST PROVIDER"
+                    referring_physician_set = True
+                    print(f"    ✓ ReferringPhysicianName (0008,0090) updated: {old_referring_physician} → TEST PROVIDER")
+                else:
+                    ds.add_new((0x0008, 0x0090), 'PN', "TEST PROVIDER")
+                    referring_physician_set = True
+                    print("    ✓ ReferringPhysicianName (0008,0090) added: → TEST PROVIDER")
+            except Exception as e:
+                print(f"    ⚠ Warning: Could not set ReferringPhysicianName (0008,0090): {e}")
+            
+            # Fallback to private tag (0808,0090) if standard tag failed
             if not referring_physician_set:
-                # Try private tag (0808,0090)
                 try:
                     if (0x0808, 0x0090) in ds:
+                        old_referring_physician = str(ds[0x0808, 0x0090].value)
                         ds[0x0808, 0x0090].value = "TEST PROVIDER"
                         referring_physician_set = True
-                        print("    ✓ ReferringPhysicianName updated (private tag)")
+                        print(f"    ✓ ReferringPhysicianName (0808,0090) updated: {old_referring_physician} → TEST PROVIDER")
                     else:
-                        # Add the tag if it doesn't exist
                         ds.add_new((0x0808, 0x0090), 'PN', "TEST PROVIDER")
                         referring_physician_set = True
-                        print("    ✓ ReferringPhysicianName updated (private tag added)")
+                        print("    ✓ ReferringPhysicianName (0808,0090) added: → TEST PROVIDER")
                 except Exception as e:
-                    print(f"    ⚠ Warning: Could not set ReferringPhysicianName: {e}")
+                    print(f"    ⚠ Warning: Could not set ReferringPhysicianName (0808,0090): {e}")
             
             # Save the file
             print("  Step 5: Saving updated DICOM file...")
@@ -327,36 +332,67 @@ def verify_changes(
         else:
             verification_errors.append("SeriesInstanceUID tag missing after update")
         
-        # Verify other test tags
-        print("    → Verifying test data tags...")
-        expected_test_tags = {
-            'PatientID': '11043207',
-            'PatientName': 'ZZTESTPATIENT^MIDIA THREE',
-            'PatientBirthDate': '19010101',
-            'InstitutionName': 'TEST FACILITY',
-            'ReferringPhysicianName': 'TEST PROVIDER'
-        }
+        # Verify other test tags using hex tag values directly
+        print("    → Verifying test data tags (using hex tag values)...")
         
-        for tag_name, expected_value in expected_test_tags.items():
-            if hasattr(ds, tag_name):
-                current_value = str(getattr(ds, tag_name))
-                if current_value != expected_value:
-                    verification_errors.append(f"{tag_name} mismatch: expected '{expected_value}', got '{current_value}'")
-                else:
-                    print(f"      ✓ {tag_name} verified: {current_value}")
+        # PatientID - (0010,0020)
+        if (0x0010, 0x0020) in ds:
+            current_value = str(ds[0x0010, 0x0020].value)
+            if current_value != '11043207':
+                verification_errors.append(f"PatientID (0010,0020) mismatch: expected '11043207', got '{current_value}'")
             else:
-                # Check for ReferringPhysicianName in private tag
-                if tag_name == 'ReferringPhysicianName':
-                    if (0x0808, 0x0090) in ds:
-                        current_value = str(ds[0x0808, 0x0090].value)
-                        if current_value != expected_value:
-                            verification_errors.append(f"{tag_name} mismatch: expected '{expected_value}', got '{current_value}'")
-                        else:
-                            print(f"      ✓ {tag_name} verified (private tag): {current_value}")
-                    else:
-                        verification_errors.append(f"{tag_name} tag missing after update")
-                else:
-                    verification_errors.append(f"{tag_name} tag missing after update")
+                print(f"      ✓ PatientID (0010,0020) verified: {current_value}")
+        else:
+            verification_errors.append("PatientID (0010,0020) tag missing after update")
+        
+        # PatientName - (0010,0010)
+        if (0x0010, 0x0010) in ds:
+            current_value = str(ds[0x0010, 0x0010].value)
+            if current_value != 'ZZTESTPATIENT^MIDIA THREE':
+                verification_errors.append(f"PatientName (0010,0010) mismatch: expected 'ZZTESTPATIENT^MIDIA THREE', got '{current_value}'")
+            else:
+                print(f"      ✓ PatientName (0010,0010) verified: {current_value}")
+        else:
+            verification_errors.append("PatientName (0010,0010) tag missing after update")
+        
+        # PatientBirthDate - (0010,0030)
+        if (0x0010, 0x0030) in ds:
+            current_value = str(ds[0x0010, 0x0030].value)
+            if current_value != '19010101':
+                verification_errors.append(f"PatientBirthDate (0010,0030) mismatch: expected '19010101', got '{current_value}'")
+            else:
+                print(f"      ✓ PatientBirthDate (0010,0030) verified: {current_value}")
+        else:
+            verification_errors.append("PatientBirthDate (0010,0030) tag missing after update")
+        
+        # InstitutionName - (0008,0080)
+        if (0x0008, 0x0080) in ds:
+            current_value = str(ds[0x0008, 0x0080].value)
+            if current_value != 'TEST FACILITY':
+                verification_errors.append(f"InstitutionName (0008,0080) mismatch: expected 'TEST FACILITY', got '{current_value}'")
+            else:
+                print(f"      ✓ InstitutionName (0008,0080) verified: {current_value}")
+        else:
+            verification_errors.append("InstitutionName (0008,0080) tag missing after update")
+        
+        # ReferringPhysicianName - Try (0008,0090) first, then (0808,0090)
+        referring_physician_verified = False
+        if (0x0008, 0x0090) in ds:
+            current_value = str(ds[0x0008, 0x0090].value)
+            if current_value != 'TEST PROVIDER':
+                verification_errors.append(f"ReferringPhysicianName (0008,0090) mismatch: expected 'TEST PROVIDER', got '{current_value}'")
+            else:
+                print(f"      ✓ ReferringPhysicianName (0008,0090) verified: {current_value}")
+                referring_physician_verified = True
+        elif (0x0808, 0x0090) in ds:
+            current_value = str(ds[0x0808, 0x0090].value)
+            if current_value != 'TEST PROVIDER':
+                verification_errors.append(f"ReferringPhysicianName (0808,0090) mismatch: expected 'TEST PROVIDER', got '{current_value}'")
+            else:
+                print(f"      ✓ ReferringPhysicianName (0808,0090) verified: {current_value}")
+                referring_physician_verified = True
+        else:
+            verification_errors.append("ReferringPhysicianName (0008,0090 or 0808,0090) tag missing after update")
         
         if verification_errors:
             return False, "; ".join(verification_errors)

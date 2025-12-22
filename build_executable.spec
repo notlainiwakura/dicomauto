@@ -7,8 +7,11 @@ a = Analysis(
     ['update_dicom_tags_gui.py'],
     pathex=[],
     binaries=[],
-    datas=[('dcmutl.py', '.')],  # Include dcmutl.py as data
-    hiddenimports=['pydicom', 'dcmutl', 'pydicom.uid', 'pydicom.errors', 'tkinter', 'tkinter.filedialog', 'tkinter.messagebox', 'tkinter.scrolledtext', 'tkinter.ttk'],
+    datas=[],  # dcmutl.py will be included via hiddenimports
+    hiddenimports=['pydicom', 'dcmutl', 'pydicom.uid', 'pydicom.errors', 
+                   'tkinter', 'tkinter.filedialog', 'tkinter.messagebox', 
+                   'tkinter.scrolledtext', 'tkinter.ttk',
+                   'dcmutl.get_dcm_files'],  # Explicitly include dcmutl functions
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

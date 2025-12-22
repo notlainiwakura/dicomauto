@@ -18,15 +18,32 @@ from pydicom import dcmread
 from pydicom.uid import generate_uid
 from pydicom.errors import InvalidDicomError
 
-# Add project root to path to allow importing dcmutl
-script_dir = Path(__file__).parent.absolute()
-if str(script_dir) not in sys.path:
-    sys.path.insert(0, str(script_dir))
+# Handle imports for both development and PyInstaller executable
+# PyInstaller creates a temporary folder and stores path in _MEIPASS
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    base_path = Path(sys._MEIPASS)
+else:
+    # Running as script
+    base_path = Path(__file__).parent.absolute()
+
+# Add to path for importing dcmutl
+if str(base_path) not in sys.path:
+    sys.path.insert(0, str(base_path))
 
 try:
     from dcmutl import get_dcm_files
 except ImportError as e:
-    messagebox.showerror("Import Error", f"Could not import dcmutl module: {e}\n\nMake sure dcmutl.py is in the same directory.")
+    # Try to show error, but if GUI isn't ready, print to console
+    try:
+        import tkinter.messagebox
+        tkinter.messagebox.showerror("Import Error", 
+            f"Could not import dcmutl module: {e}\n\n"
+            f"Base path: {base_path}\n"
+            f"Python path: {sys.path[:3]}")
+    except:
+        print(f"ERROR: Could not import dcmutl module: {e}")
+        print(f"Base path: {base_path}")
     sys.exit(1)
 
 

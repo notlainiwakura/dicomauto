@@ -12,33 +12,49 @@ This branch contains the executable version of `update_dicom_tags.py`.
 
 ### Windows
 
-```bash
+**Option 1: Using the build script (Recommended)**
+```cmd
+build.bat
+```
+
+**Option 2: Manual build**
+```cmd
 # Install PyInstaller
-pip install pyinstaller
+python -m pip install pyinstaller
 
 # Build executable using the spec file
-pyinstaller build_executable.spec
+python -m PyInstaller build_executable.spec
 
 # The executable will be in: dist/DICOMTagUpdater.exe
 ```
 
+**Note**: Use `python -m PyInstaller` instead of just `pyinstaller` if the command is not recognized.
+
 ### Alternative: One-line build
 
-```bash
-pyinstaller --onefile --console --name "DICOMTagUpdater" --add-data "dcmutl.py;." update_dicom_tags.py
+```cmd
+python -m PyInstaller --onefile --console --name "DICOMTagUpdater" --add-data "dcmutl.py;." update_dicom_tags.py
 ```
 
 ### macOS/Linux
 
+**Option 1: Using the build script (Recommended)**
+```bash
+./build.sh
+```
+
+**Option 2: Manual build**
 ```bash
 # Install PyInstaller
-pip install pyinstaller
+python3 -m pip install pyinstaller
 
 # Build executable
-pyinstaller build_executable.spec
+python3 -m PyInstaller build_executable.spec
 
-# The executable will be in: dist/DICOMTagUpdater (or dist/DICOMTagUpdater.exe on Windows)
+# The executable will be in: dist/DICOMTagUpdater
 ```
+
+**Note**: Use `python3 -m PyInstaller` instead of just `pyinstaller` if the command is not recognized.
 
 ## Usage
 
@@ -71,8 +87,8 @@ DICOMTagUpdater.exe "X:\TEST\Test Data\Data" --dry-run
 - Command: `pyinstaller --onedir build_executable.spec`
 
 ### With Icon (Windows)
-```bash
-pyinstaller --onefile --console --name "DICOMTagUpdater" --icon=icon.ico --add-data "dcmutl.py;." update_dicom_tags.py
+```cmd
+python -m PyInstaller --onefile --console --name "DICOMTagUpdater" --icon=icon.ico --add-data "dcmutl.py;." update_dicom_tags.py
 ```
 
 ## Troubleshooting

@@ -30,10 +30,21 @@ python -m PyInstaller build_executable.spec
 
 **Note**: Use `python -m PyInstaller` instead of just `pyinstaller` if the command is not recognized.
 
-### Alternative: One-line build
+### Alternative: One-line build (Recommended if spec file fails)
 
+**For GUI version (Windows):**
+```cmd
+python -m PyInstaller --onefile --windowed --name "DICOMTagUpdater" --add-data "dcmutl.py;." update_dicom_tags_gui.py
+```
+
+**For CLI version (Windows):**
 ```cmd
 python -m PyInstaller --onefile --console --name "DICOMTagUpdater" --add-data "dcmutl.py;." update_dicom_tags.py
+```
+
+**For macOS/Linux (use : instead of ;):**
+```bash
+python3 -m PyInstaller --onefile --windowed --name "DICOMTagUpdater" --add-data "dcmutl.py:." update_dicom_tags_gui.py
 ```
 
 ### macOS/Linux

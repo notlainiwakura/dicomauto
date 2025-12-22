@@ -181,24 +181,36 @@ def update_dicom_file(
             # Update other test tags
             print("  Step 4: Updating test data tags...")
             
-            # PatientID
+            # PatientID - (0010,0020) LO (Long String)
             old_patient_id = getattr(ds, 'PatientID', None)
-            update_tags_ds(ds, "PatientID", "11043207")
+            if (0x0010, 0x0020) not in ds:
+                ds.add_new((0x0010, 0x0020), 'LO', "11043207")
+            else:
+                ds[0x0010, 0x0020].value = "11043207"
             print(f"    ✓ PatientID updated: {old_patient_id} → 11043207")
             
-            # PatientName
+            # PatientName - (0010,0010) PN (Person Name)
             old_patient_name = getattr(ds, 'PatientName', None)
-            update_tags_ds(ds, "PatientName", "ZZTESTPATIENT^MIDIA THREE")
+            if (0x0010, 0x0010) not in ds:
+                ds.add_new((0x0010, 0x0010), 'PN', "ZZTESTPATIENT^MIDIA THREE")
+            else:
+                ds[0x0010, 0x0010].value = "ZZTESTPATIENT^MIDIA THREE"
             print(f"    ✓ PatientName updated: {old_patient_name} → ZZTESTPATIENT^MIDIA THREE")
             
-            # PatientBirthDate
+            # PatientBirthDate - (0010,0030) DA (Date)
             old_birth_date = getattr(ds, 'PatientBirthDate', None)
-            update_tags_ds(ds, "PatientBirthDate", "19010101")
+            if (0x0010, 0x0030) not in ds:
+                ds.add_new((0x0010, 0x0030), 'DA', "19010101")
+            else:
+                ds[0x0010, 0x0030].value = "19010101"
             print(f"    ✓ PatientBirthDate updated: {old_birth_date} → 19010101")
             
-            # InstitutionName
+            # InstitutionName - (0008,0080) LO (Long String)
             old_institution = getattr(ds, 'InstitutionName', None)
-            update_tags_ds(ds, "InstitutionName", "TEST FACILITY")
+            if (0x0008, 0x0080) not in ds:
+                ds.add_new((0x0008, 0x0080), 'LO', "TEST FACILITY")
+            else:
+                ds[0x0008, 0x0080].value = "TEST FACILITY"
             print(f"    ✓ InstitutionName updated: {old_institution} → TEST FACILITY")
             
             # Try ReferringPhysicianName tag (0008,0090) first, fallback to (0808,0090)

@@ -180,14 +180,26 @@ def update_dicom_file(
             
             # Update other test tags
             print("  Step 4: Updating test data tags...")
+            
+            # PatientID
+            old_patient_id = getattr(ds, 'PatientID', None)
             update_tags_ds(ds, "PatientID", "11043207")
-            print("    ✓ PatientID updated")
+            print(f"    ✓ PatientID updated: {old_patient_id} → 11043207")
+            
+            # PatientName
+            old_patient_name = getattr(ds, 'PatientName', None)
             update_tags_ds(ds, "PatientName", "ZZTESTPATIENT^MIDIA THREE")
-            print("    ✓ PatientName updated")
+            print(f"    ✓ PatientName updated: {old_patient_name} → ZZTESTPATIENT^MIDIA THREE")
+            
+            # PatientBirthDate
+            old_birth_date = getattr(ds, 'PatientBirthDate', None)
             update_tags_ds(ds, "PatientBirthDate", "19010101")
-            print("    ✓ PatientBirthDate updated")
+            print(f"    ✓ PatientBirthDate updated: {old_birth_date} → 19010101")
+            
+            # InstitutionName
+            old_institution = getattr(ds, 'InstitutionName', None)
             update_tags_ds(ds, "InstitutionName", "TEST FACILITY")
-            print("    ✓ InstitutionName updated")
+            print(f"    ✓ InstitutionName updated: {old_institution} → TEST FACILITY")
             
             # Try ReferringPhysicianName tag (0008,0090) first, fallback to (0808,0090)
             referring_physician_set = False
@@ -302,6 +314,37 @@ def verify_changes(
                 print("      ✓ SeriesInstanceUID verified")
         else:
             verification_errors.append("SeriesInstanceUID tag missing after update")
+        
+        # Verify other test tags
+        print("    → Verifying test data tags...")
+        expected_test_tags = {
+            'PatientID': '11043207',
+            'PatientName': 'ZZTESTPATIENT^MIDIA THREE',
+            'PatientBirthDate': '19010101',
+            'InstitutionName': 'TEST FACILITY',
+            'ReferringPhysicianName': 'TEST PROVIDER'
+        }
+        
+        for tag_name, expected_value in expected_test_tags.items():
+            if hasattr(ds, tag_name):
+                current_value = str(getattr(ds, tag_name))
+                if current_value != expected_value:
+                    verification_errors.append(f"{tag_name} mismatch: expected '{expected_value}', got '{current_value}'")
+                else:
+                    print(f"      ✓ {tag_name} verified: {current_value}")
+            else:
+                # Check for ReferringPhysicianName in private tag
+                if tag_name == 'ReferringPhysicianName':
+                    if (0x0808, 0x0090) in ds:
+                        current_value = str(ds[0x0808, 0x0090].value)
+                        if current_value != expected_value:
+                            verification_errors.append(f"{tag_name} mismatch: expected '{expected_value}', got '{current_value}'")
+                        else:
+                            print(f"      ✓ {tag_name} verified (private tag): {current_value}")
+                    else:
+                        verification_errors.append(f"{tag_name} tag missing after update")
+                else:
+                    verification_errors.append(f"{tag_name} tag missing after update")
         
         if verification_errors:
             return False, "; ".join(verification_errors)

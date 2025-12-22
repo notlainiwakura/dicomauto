@@ -58,21 +58,29 @@ python3 -m PyInstaller build_executable.spec
 
 ## Usage
 
-After building, you can run the executable directly:
+After building, you can run the executable directly. The GUI version will open automatically:
 
 ### Windows
 ```cmd
-DICOMTagUpdater.exe "X:\TEST\Test Data\Data"
-DICOMTagUpdater.exe "X:\TEST\Test Data\Data" --verbose
-DICOMTagUpdater.exe "X:\TEST\Test Data\Data" --dry-run
+DICOMTagUpdater.exe
 ```
 
-### macOS/Linux
-```bash
-./DICOMTagUpdater "/path/to/dicom/folder"
-./DICOMTagUpdater "/path/to/dicom/folder" --verbose
-./DICOMTagUpdater "/path/to/dicom/folder" --dry-run
-```
+The GUI will allow you to:
+- Browse and select a DICOM file or folder
+- Edit tag values (defaults are preselected)
+- Process files with progress indication
+- View output and results
+
+### Features
+- **File/Folder Selection**: Choose either a single DICOM file or a folder containing multiple DICOM files
+- **Editable Tag Values**: All tag values are preselected with defaults but can be edited:
+  - Patient ID: `11043207`
+  - Patient Name: `ZZTESTPATIENT^MIDIA THREE`
+  - Patient Birth Date: `19010101`
+  - Institution Name: `TEST FACILITY`
+  - Referring Physician Name: `TEST PROVIDER`
+- **Automatic Unique Values**: StudyInstanceUID, AccessionNumber, and SeriesInstanceUID are automatically generated with unique timestamp-based values
+- **Progress Tracking**: Real-time progress updates and output log
 
 ## Building Options
 

@@ -1,14 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec file for DICOM Tag Updater
+# PyInstaller spec file for DICOM Tag Updater (GUI Version)
 
 block_cipher = None
 
 a = Analysis(
-    ['update_dicom_tags.py'],
+    ['update_dicom_tags_gui.py'],
     pathex=[],
     binaries=[],
     datas=[('dcmutl.py', '.')],  # Include dcmutl.py as data
-    hiddenimports=['pydicom', 'dcmutl', 'pydicom.uid', 'pydicom.errors'],
+    hiddenimports=['pydicom', 'dcmutl', 'pydicom.uid', 'pydicom.errors', 'tkinter', 'tkinter.filedialog', 'tkinter.messagebox', 'tkinter.scrolledtext', 'tkinter.ttk'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,11 +35,12 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,  # Keep console for command-line interface
+    console=False,  # GUI application - no console window
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=None,  # Can add icon.ico here if available
 )
 

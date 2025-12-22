@@ -13,7 +13,7 @@ import sys
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from pydicom import dcmread
 from pydicom.uid import generate_uid
 from pydicom.errors import InvalidDicomError
@@ -73,6 +73,36 @@ def is_valid_uid(uid: str) -> bool:
     return True
 
 
+def update_tag_recursively(ds, tag_tuple: Tuple, value, vr: str = None) -> int:
+    """
+    Recursively update a tag in the dataset and all nested sequences.
+    
+    Args:
+        ds: pydicom Dataset object
+        tag_tuple: Tuple of (group, element) for the tag, e.g. (0x0010, 0x0010)
+        value: Value to set for the tag
+        vr: Value Representation (e.g., 'PN', 'LO', 'DA') - required if adding new tag
+        
+    Returns:
+        Count of how many times the tag was updated
+    """
+    count = 0
+    
+    # Update at current level if tag exists
+    if tag_tuple in ds:
+        ds[tag_tuple].value = value
+        count += 1
+    
+    # Recursively search through all sequences
+    for elem in ds:
+        if elem.VR == "SQ" and elem.value:
+            # This is a sequence - iterate through its items
+            for seq_item in elem.value:
+                count += update_tag_recursively(seq_item, tag_tuple, value, vr)
+    
+    return count
+
+
 def get_original_values(ds) -> Dict[str, Optional[str]]:
     """Extract original values from DICOM dataset."""
     originals = {
@@ -129,53 +159,49 @@ def update_dicom_file(
         if progress_callback:
             progress_callback(f"Updating tags: {os.path.basename(file_path)}")
         
-        # Update unique identifier tags
+        # Update unique identifier tags (at root level first, then recursively in sequences)
         if (0x0020, 0x000d) not in ds:
             ds.add_new((0x0020, 0x000d), 'UI', new_study_uid)
-        else:
-            ds[0x0020, 0x000d].value = new_study_uid
+        update_tag_recursively(ds, (0x0020, 0x000d), new_study_uid, 'UI')
         
         if (0x0008, 0x0050) not in ds:
             ds.add_new((0x0008, 0x0050), 'SH', new_accession_number)
-        else:
-            ds[0x0008, 0x0050].value = new_accession_number
+        update_tag_recursively(ds, (0x0008, 0x0050), new_accession_number, 'SH')
         
         if (0x0020, 0x000e) not in ds:
             ds.add_new((0x0020, 0x000e), 'UI', new_series_uid)
-        else:
-            ds[0x0020, 0x000e].value = new_series_uid
+        update_tag_recursively(ds, (0x0020, 0x000e), new_series_uid, 'UI')
         
-        # Update test data tags using hex values
+        # Update test data tags using recursive update (updates in sequences too)
         # PatientID - (0010,0020)
+        patient_id_value = tag_values.get('PatientID', '11043207')
         if (0x0010, 0x0020) not in ds:
-            ds.add_new((0x0010, 0x0020), 'LO', tag_values.get('PatientID', '11043207'))
-        else:
-            ds[0x0010, 0x0020].value = tag_values.get('PatientID', '11043207')
+            ds.add_new((0x0010, 0x0020), 'LO', patient_id_value)
+        update_tag_recursively(ds, (0x0010, 0x0020), patient_id_value, 'LO')
         
         # PatientName - (0010,0010)
+        patient_name_value = tag_values.get('PatientName', 'ZZTESTPATIENT^MIDIA THREE')
         if (0x0010, 0x0010) not in ds:
-            ds.add_new((0x0010, 0x0010), 'PN', tag_values.get('PatientName', 'ZZTESTPATIENT^MIDIA THREE'))
-        else:
-            ds[0x0010, 0x0010].value = tag_values.get('PatientName', 'ZZTESTPATIENT^MIDIA THREE')
+            ds.add_new((0x0010, 0x0010), 'PN', patient_name_value)
+        update_tag_recursively(ds, (0x0010, 0x0010), patient_name_value, 'PN')
         
         # PatientBirthDate - (0010,0030)
+        birth_date_value = tag_values.get('PatientBirthDate', '19010101')
         if (0x0010, 0x0030) not in ds:
-            ds.add_new((0x0010, 0x0030), 'DA', tag_values.get('PatientBirthDate', '19010101'))
-        else:
-            ds[0x0010, 0x0030].value = tag_values.get('PatientBirthDate', '19010101')
+            ds.add_new((0x0010, 0x0030), 'DA', birth_date_value)
+        update_tag_recursively(ds, (0x0010, 0x0030), birth_date_value, 'DA')
         
         # InstitutionName - (0008,0080)
+        institution_value = tag_values.get('InstitutionName', 'TEST FACILITY')
         if (0x0008, 0x0080) not in ds:
-            ds.add_new((0x0008, 0x0080), 'LO', tag_values.get('InstitutionName', 'TEST FACILITY'))
-        else:
-            ds[0x0008, 0x0080].value = tag_values.get('InstitutionName', 'TEST FACILITY')
+            ds.add_new((0x0008, 0x0080), 'LO', institution_value)
+        update_tag_recursively(ds, (0x0008, 0x0080), institution_value, 'LO')
         
         # ReferringPhysicianName - (0008,0090)
         referring_physician_value = tag_values.get('ReferringPhysicianName', 'TEST PROVIDER')
         if (0x0008, 0x0090) not in ds:
             ds.add_new((0x0008, 0x0090), 'PN', referring_physician_value)
-        else:
-            ds[0x0008, 0x0090].value = referring_physician_value
+        update_tag_recursively(ds, (0x0008, 0x0090), referring_physician_value, 'PN')
         
         # Save the file
         ds.save_as(file_path, write_like_original=False)

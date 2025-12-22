@@ -15,7 +15,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from pydicom import dcmread
 from pydicom.uid import generate_uid
 from pydicom.errors import InvalidDicomError
@@ -83,6 +83,36 @@ def is_valid_uid(uid: str) -> bool:
             return False
     
     return True
+
+
+def update_tag_recursively(ds, tag_tuple: Tuple, value, vr: str = None) -> int:
+    """
+    Recursively update a tag in the dataset and all nested sequences.
+    
+    Args:
+        ds: pydicom Dataset object
+        tag_tuple: Tuple of (group, element) for the tag, e.g. (0x0010, 0x0010)
+        value: Value to set for the tag
+        vr: Value Representation (e.g., 'PN', 'LO', 'DA') - required if adding new tag
+        
+    Returns:
+        Count of how many times the tag was updated
+    """
+    count = 0
+    
+    # Update at current level if tag exists
+    if tag_tuple in ds:
+        ds[tag_tuple].value = value
+        count += 1
+    
+    # Recursively search through all sequences
+    for elem in ds:
+        if elem.VR == "SQ" and elem.value:
+            # This is a sequence - iterate through its items
+            for seq_item in elem.value:
+                count += update_tag_recursively(seq_item, tag_tuple, value, vr)
+    
+    return count
 
 
 def get_original_values(ds) -> Dict[str, Optional[str]]:
@@ -171,15 +201,22 @@ def update_dicom_file(
             print(f"  [Verbose] Original SeriesInstanceUID: {original_values['SeriesInstanceUID']}")
         
         if not dry_run:
-            # Update unique tags
-            print("  Step 3: Updating unique identifier tags...")
+            # Update unique tags (also recursively in sequences)
+            print("  Step 3: Updating unique identifier tags (including nested sequences)...")
             update_tags_ds(ds, "StudyInstanceUID", new_study_uid)
             update_tags_ds(ds, "AccessionNumber", new_accession_number)
             update_tags_ds(ds, "SeriesInstanceUID", new_series_uid)
-            print("    ✓ Unique identifier tags updated")
             
-            # Update other test tags using direct hex tag assignment
-            print("  Step 4: Updating test data tags (using hex tag values)...")
+            # Also update recursively in sequences
+            study_uid_count = update_tag_recursively(ds, (0x0020, 0x000D), new_study_uid, 'UI')
+            accession_count = update_tag_recursively(ds, (0x0008, 0x0050), new_accession_number, 'SH')
+            series_uid_count = update_tag_recursively(ds, (0x0020, 0x000E), new_series_uid, 'UI')
+            print(f"    ✓ StudyInstanceUID updated in {study_uid_count} location(s)")
+            print(f"    ✓ AccessionNumber updated in {accession_count} location(s)")
+            print(f"    ✓ SeriesInstanceUID updated in {series_uid_count} location(s)")
+            
+            # Update other test tags using recursive update (updates in sequences too)
+            print("  Step 4: Updating test data tags (including nested sequences)...")
             
             # PatientID - (0010,0020) LO (Long String)
             old_patient_id = None
@@ -187,9 +224,8 @@ def update_dicom_file(
                 old_patient_id = str(ds[0x0010, 0x0020].value)
             if (0x0010, 0x0020) not in ds:
                 ds.add_new((0x0010, 0x0020), 'LO', "11043207")
-            else:
-                ds[0x0010, 0x0020].value = "11043207"
-            print(f"    ✓ PatientID (0010,0020) updated: {old_patient_id} → 11043207")
+            patient_id_count = update_tag_recursively(ds, (0x0010, 0x0020), "11043207", 'LO')
+            print(f"    ✓ PatientID (0010,0020) updated in {patient_id_count} location(s): {old_patient_id} → 11043207")
             
             # PatientName - (0010,0010) PN (Person Name)
             old_patient_name = None
@@ -197,9 +233,8 @@ def update_dicom_file(
                 old_patient_name = str(ds[0x0010, 0x0010].value)
             if (0x0010, 0x0010) not in ds:
                 ds.add_new((0x0010, 0x0010), 'PN', "ZZTESTPATIENT^MIDIA THREE")
-            else:
-                ds[0x0010, 0x0010].value = "ZZTESTPATIENT^MIDIA THREE"
-            print(f"    ✓ PatientName (0010,0010) updated: {old_patient_name} → ZZTESTPATIENT^MIDIA THREE")
+            patient_name_count = update_tag_recursively(ds, (0x0010, 0x0010), "ZZTESTPATIENT^MIDIA THREE", 'PN')
+            print(f"    ✓ PatientName (0010,0010) updated in {patient_name_count} location(s): {old_patient_name} → ZZTESTPATIENT^MIDIA THREE")
             
             # PatientBirthDate - (0010,0030) DA (Date)
             old_birth_date = None
@@ -207,9 +242,8 @@ def update_dicom_file(
                 old_birth_date = str(ds[0x0010, 0x0030].value)
             if (0x0010, 0x0030) not in ds:
                 ds.add_new((0x0010, 0x0030), 'DA', "19010101")
-            else:
-                ds[0x0010, 0x0030].value = "19010101"
-            print(f"    ✓ PatientBirthDate (0010,0030) updated: {old_birth_date} → 19010101")
+            birth_date_count = update_tag_recursively(ds, (0x0010, 0x0030), "19010101", 'DA')
+            print(f"    ✓ PatientBirthDate (0010,0030) updated in {birth_date_count} location(s): {old_birth_date} → 19010101")
             
             # InstitutionName - (0008,0080) LO (Long String)
             old_institution = None
@@ -217,42 +251,22 @@ def update_dicom_file(
                 old_institution = str(ds[0x0008, 0x0080].value)
             if (0x0008, 0x0080) not in ds:
                 ds.add_new((0x0008, 0x0080), 'LO', "TEST FACILITY")
-            else:
-                ds[0x0008, 0x0080].value = "TEST FACILITY"
-            print(f"    ✓ InstitutionName (0008,0080) updated: {old_institution} → TEST FACILITY")
+            institution_count = update_tag_recursively(ds, (0x0008, 0x0080), "TEST FACILITY", 'LO')
+            print(f"    ✓ InstitutionName (0008,0080) updated in {institution_count} location(s): {old_institution} → TEST FACILITY")
             
-            # ReferringPhysicianName - Try (0008,0090) first, fallback to (0808,0090)
+            # ReferringPhysicianName - (0008,0090) PN (Person Name)
             old_referring_physician = None
-            referring_physician_set = False
+            if (0x0008, 0x0090) in ds:
+                old_referring_physician = str(ds[0x0008, 0x0090].value)
+            if (0x0008, 0x0090) not in ds:
+                ds.add_new((0x0008, 0x0090), 'PN', "TEST PROVIDER")
+            referring_count = update_tag_recursively(ds, (0x0008, 0x0090), "TEST PROVIDER", 'PN')
+            print(f"    ✓ ReferringPhysicianName (0008,0090) updated in {referring_count} location(s): {old_referring_physician} → TEST PROVIDER")
             
-            # Try standard tag (0008,0090) first
-            try:
-                if (0x0008, 0x0090) in ds:
-                    old_referring_physician = str(ds[0x0008, 0x0090].value)
-                    ds[0x0008, 0x0090].value = "TEST PROVIDER"
-                    referring_physician_set = True
-                    print(f"    ✓ ReferringPhysicianName (0008,0090) updated: {old_referring_physician} → TEST PROVIDER")
-                else:
-                    ds.add_new((0x0008, 0x0090), 'PN', "TEST PROVIDER")
-                    referring_physician_set = True
-                    print("    ✓ ReferringPhysicianName (0008,0090) added: → TEST PROVIDER")
-            except Exception as e:
-                print(f"    ⚠ Warning: Could not set ReferringPhysicianName (0008,0090): {e}")
-            
-            # Fallback to private tag (0808,0090) if standard tag failed
-            if not referring_physician_set:
-                try:
-                    if (0x0808, 0x0090) in ds:
-                        old_referring_physician = str(ds[0x0808, 0x0090].value)
-                        ds[0x0808, 0x0090].value = "TEST PROVIDER"
-                        referring_physician_set = True
-                        print(f"    ✓ ReferringPhysicianName (0808,0090) updated: {old_referring_physician} → TEST PROVIDER")
-                    else:
-                        ds.add_new((0x0808, 0x0090), 'PN', "TEST PROVIDER")
-                        referring_physician_set = True
-                        print("    ✓ ReferringPhysicianName (0808,0090) added: → TEST PROVIDER")
-                except Exception as e:
-                    print(f"    ⚠ Warning: Could not set ReferringPhysicianName (0808,0090): {e}")
+            # Also try private tag (0808,0090) if it exists in sequences
+            private_referring_count = update_tag_recursively(ds, (0x0808, 0x0090), "TEST PROVIDER", 'PN')
+            if private_referring_count > 0:
+                print(f"    ✓ ReferringPhysicianName (0808,0090) updated in {private_referring_count} location(s)")
             
             # Save the file
             print("  Step 5: Saving updated DICOM file...")
@@ -265,6 +279,36 @@ def update_dicom_file(
         return False, f"Invalid DICOM file: {e}", {}, {}
     except Exception as e:
         return False, f"Error processing file: {e}", {}, {}
+
+
+def find_tag_values_recursively(ds, tag_tuple: Tuple, path: str = "") -> List[Tuple[str, str]]:
+    """
+    Recursively find all occurrences of a tag in the dataset and sequences.
+    
+    Args:
+        ds: pydicom Dataset object
+        tag_tuple: Tuple of (group, element) for the tag
+        path: Current path for tracking location
+        
+    Returns:
+        List of tuples (path, value) for each occurrence found
+    """
+    results = []
+    
+    # Check at current level
+    if tag_tuple in ds:
+        location = path if path else "root"
+        results.append((location, str(ds[tag_tuple].value)))
+    
+    # Recursively search through all sequences
+    for elem in ds:
+        if elem.VR == "SQ" and elem.value:
+            seq_name = elem.keyword or f"({elem.tag.group:04X},{elem.tag.element:04X})"
+            for i, seq_item in enumerate(elem.value):
+                item_path = f"{path}.{seq_name}[{i}]" if path else f"{seq_name}[{i}]"
+                results.extend(find_tag_values_recursively(seq_item, tag_tuple, item_path))
+    
+    return results
 
 
 def verify_changes(
@@ -332,67 +376,35 @@ def verify_changes(
         else:
             verification_errors.append("SeriesInstanceUID tag missing after update")
         
-        # Verify other test tags using hex tag values directly
-        print("    → Verifying test data tags (using hex tag values)...")
+        # Verify test tags including nested sequences
+        print("    → Verifying test data tags (including nested sequences)...")
         
-        # PatientID - (0010,0020)
-        if (0x0010, 0x0020) in ds:
-            current_value = str(ds[0x0010, 0x0020].value)
-            if current_value != '11043207':
-                verification_errors.append(f"PatientID (0010,0020) mismatch: expected '11043207', got '{current_value}'")
-            else:
-                print(f"      ✓ PatientID (0010,0020) verified: {current_value}")
-        else:
-            verification_errors.append("PatientID (0010,0020) tag missing after update")
+        # Define tags to verify with their expected values
+        tags_to_verify = [
+            ((0x0010, 0x0020), "PatientID", "11043207"),
+            ((0x0010, 0x0010), "PatientName", "ZZTESTPATIENT^MIDIA THREE"),
+            ((0x0010, 0x0030), "PatientBirthDate", "19010101"),
+            ((0x0008, 0x0080), "InstitutionName", "TEST FACILITY"),
+            ((0x0008, 0x0090), "ReferringPhysicianName", "TEST PROVIDER"),
+        ]
         
-        # PatientName - (0010,0010)
-        if (0x0010, 0x0010) in ds:
-            current_value = str(ds[0x0010, 0x0010].value)
-            if current_value != 'ZZTESTPATIENT^MIDIA THREE':
-                verification_errors.append(f"PatientName (0010,0010) mismatch: expected 'ZZTESTPATIENT^MIDIA THREE', got '{current_value}'")
-            else:
-                print(f"      ✓ PatientName (0010,0010) verified: {current_value}")
-        else:
-            verification_errors.append("PatientName (0010,0010) tag missing after update")
-        
-        # PatientBirthDate - (0010,0030)
-        if (0x0010, 0x0030) in ds:
-            current_value = str(ds[0x0010, 0x0030].value)
-            if current_value != '19010101':
-                verification_errors.append(f"PatientBirthDate (0010,0030) mismatch: expected '19010101', got '{current_value}'")
-            else:
-                print(f"      ✓ PatientBirthDate (0010,0030) verified: {current_value}")
-        else:
-            verification_errors.append("PatientBirthDate (0010,0030) tag missing after update")
-        
-        # InstitutionName - (0008,0080)
-        if (0x0008, 0x0080) in ds:
-            current_value = str(ds[0x0008, 0x0080].value)
-            if current_value != 'TEST FACILITY':
-                verification_errors.append(f"InstitutionName (0008,0080) mismatch: expected 'TEST FACILITY', got '{current_value}'")
-            else:
-                print(f"      ✓ InstitutionName (0008,0080) verified: {current_value}")
-        else:
-            verification_errors.append("InstitutionName (0008,0080) tag missing after update")
-        
-        # ReferringPhysicianName - Try (0008,0090) first, then (0808,0090)
-        referring_physician_verified = False
-        if (0x0008, 0x0090) in ds:
-            current_value = str(ds[0x0008, 0x0090].value)
-            if current_value != 'TEST PROVIDER':
-                verification_errors.append(f"ReferringPhysicianName (0008,0090) mismatch: expected 'TEST PROVIDER', got '{current_value}'")
-            else:
-                print(f"      ✓ ReferringPhysicianName (0008,0090) verified: {current_value}")
-                referring_physician_verified = True
-        elif (0x0808, 0x0090) in ds:
-            current_value = str(ds[0x0808, 0x0090].value)
-            if current_value != 'TEST PROVIDER':
-                verification_errors.append(f"ReferringPhysicianName (0808,0090) mismatch: expected 'TEST PROVIDER', got '{current_value}'")
-            else:
-                print(f"      ✓ ReferringPhysicianName (0808,0090) verified: {current_value}")
-                referring_physician_verified = True
-        else:
-            verification_errors.append("ReferringPhysicianName (0008,0090 or 0808,0090) tag missing after update")
+        for tag_tuple, tag_name, expected_value in tags_to_verify:
+            occurrences = find_tag_values_recursively(ds, tag_tuple)
+            
+            if not occurrences:
+                verification_errors.append(f"{tag_name} {tag_tuple} tag missing after update")
+                continue
+            
+            all_correct = True
+            for location, current_value in occurrences:
+                if current_value != expected_value:
+                    verification_errors.append(
+                        f"{tag_name} at {location}: expected '{expected_value}', got '{current_value}'"
+                    )
+                    all_correct = False
+            
+            if all_correct:
+                print(f"      ✓ {tag_name} verified in {len(occurrences)} location(s)")
         
         if verification_errors:
             return False, "; ".join(verification_errors)

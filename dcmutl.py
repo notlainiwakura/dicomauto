@@ -23,26 +23,47 @@ def get_dcm_files(directory: str) -> List[str]:
     Returns:
         List of full paths to DICOM files (.dcm extension)
     """
+    # Normalize path for cross-platform compatibility
+    directory = os.path.normpath(directory)
+    
     # Try recursive glob first (more efficient)
     try:
-        files = glob.glob(os.path.realpath(directory) + '/**/*.dcm', recursive=True)
+        # Use os.path.join for cross-platform path handling
+        search_pattern = os.path.join(os.path.realpath(directory), '**', '*.dcm')
+        files = glob.glob(search_pattern, recursive=True)
         if files:
             return sorted(files)
-    except Exception:
+    except Exception as e:
+        # If recursive glob fails, fall through to non-recursive search
         pass
     
-    # Fallback to non-recursive search
+    # Fallback to non-recursive search (also handles subdirectories manually)
     dcm_files = []
     if not os.path.exists(directory):
         return dcm_files
     
-    for filename in os.listdir(directory):
-        filepath = os.path.join(directory, filename)
-        if os.path.isfile(filepath):
-            # Check for common DICOM extensions
-            if filename.lower().endswith(('.dcm', '.dicom')):
-                dcm_files.append(filepath)
+    def search_recursive(dir_path: str) -> List[str]:
+        """Recursively search for DICOM files."""
+        found_files = []
+        try:
+            for item in os.listdir(dir_path):
+                item_path = os.path.join(dir_path, item)
+                if os.path.isfile(item_path):
+                    # Check for common DICOM extensions
+                    if item.lower().endswith(('.dcm', '.dicom')):
+                        found_files.append(item_path)
+                elif os.path.isdir(item_path):
+                    # Recursively search subdirectories
+                    found_files.extend(search_recursive(item_path))
+        except PermissionError:
+            # Skip directories we don't have permission to access
+            pass
+        except Exception:
+            # Skip other errors and continue
+            pass
+        return found_files
     
+    dcm_files = search_recursive(directory)
     return sorted(dcm_files)
 
 

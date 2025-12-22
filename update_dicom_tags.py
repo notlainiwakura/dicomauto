@@ -140,12 +140,15 @@ def update_dicom_file(
     """
     try:
         # Read DICOM file
+        print("  Step 0: Reading DICOM file...")
         ds = dcmread(file_path)
+        print("    ✓ File read successfully")
         
-        # Get original values
+        # Get original values (stored but not displayed for security)
         original_values = get_original_values(ds)
         
         # Generate unique values
+        print("  Step 1: Generating unique timestamp-based values...")
         new_study_uid = generate_uid()
         new_accession_number = generate_accession_number()
         new_series_uid = generate_uid()
@@ -156,25 +159,35 @@ def update_dicom_file(
             'SeriesInstanceUID': new_series_uid
         }
         
+        # Log new values (security: only show new values, not originals)
+        print("  Step 2: Updating tags with new values:")
+        print(f"    → StudyInstanceUID: {new_study_uid}")
+        print(f"    → AccessionNumber: {new_accession_number}")
+        print(f"    → SeriesInstanceUID: {new_series_uid}")
+        
         if verbose:
-            print(f"  Original StudyInstanceUID: {original_values['StudyInstanceUID']}")
-            print(f"  New StudyInstanceUID: {new_study_uid}")
-            print(f"  Original AccessionNumber: {original_values['AccessionNumber']}")
-            print(f"  New AccessionNumber: {new_accession_number}")
-            print(f"  Original SeriesInstanceUID: {original_values['SeriesInstanceUID']}")
-            print(f"  New SeriesInstanceUID: {new_series_uid}")
+            print(f"  [Verbose] Original StudyInstanceUID: {original_values['StudyInstanceUID']}")
+            print(f"  [Verbose] Original AccessionNumber: {original_values['AccessionNumber']}")
+            print(f"  [Verbose] Original SeriesInstanceUID: {original_values['SeriesInstanceUID']}")
         
         if not dry_run:
-            # Update tags
+            # Update unique tags
+            print("  Step 3: Updating unique identifier tags...")
             update_tags_ds(ds, "StudyInstanceUID", new_study_uid)
             update_tags_ds(ds, "AccessionNumber", new_accession_number)
             update_tags_ds(ds, "SeriesInstanceUID", new_series_uid)
+            print("    ✓ Unique identifier tags updated")
             
             # Update other test tags
+            print("  Step 4: Updating test data tags...")
             update_tags_ds(ds, "PatientID", "11043207")
+            print("    ✓ PatientID updated")
             update_tags_ds(ds, "PatientName", "ZZTESTPATIENT^MIDIA THREE")
+            print("    ✓ PatientName updated")
             update_tags_ds(ds, "PatientBirthDate", "19010101")
+            print("    ✓ PatientBirthDate updated")
             update_tags_ds(ds, "InstitutionName", "TEST FACILITY")
+            print("    ✓ InstitutionName updated")
             
             # Try ReferringPhysicianName tag (0008,0090) first, fallback to (0808,0090)
             referring_physician_set = False
@@ -182,6 +195,7 @@ def update_dicom_file(
                 if hasattr(ds, 'ReferringPhysicianName'):
                     update_tags_ds(ds, "ReferringPhysicianName", "TEST PROVIDER")
                     referring_physician_set = True
+                    print("    ✓ ReferringPhysicianName updated (standard tag)")
                 else:
                     # Try to add the standard tag if it doesn't exist
                     try:
@@ -190,6 +204,7 @@ def update_dicom_file(
                         else:
                             ds[0x0008, 0x0090].value = "TEST PROVIDER"
                         referring_physician_set = True
+                        print("    ✓ ReferringPhysicianName updated (standard tag added)")
                     except Exception:
                         pass
             except (AttributeError, KeyError, Exception):
@@ -201,16 +216,19 @@ def update_dicom_file(
                     if (0x0808, 0x0090) in ds:
                         ds[0x0808, 0x0090].value = "TEST PROVIDER"
                         referring_physician_set = True
+                        print("    ✓ ReferringPhysicianName updated (private tag)")
                     else:
                         # Add the tag if it doesn't exist
                         ds.add_new((0x0808, 0x0090), 'PN', "TEST PROVIDER")
                         referring_physician_set = True
+                        print("    ✓ ReferringPhysicianName updated (private tag added)")
                 except Exception as e:
-                    if verbose:
-                        print(f"  Warning: Could not set ReferringPhysicianName: {e}")
+                    print(f"    ⚠ Warning: Could not set ReferringPhysicianName: {e}")
             
             # Save the file
+            print("  Step 5: Saving updated DICOM file...")
             ds.save_as(file_path, write_like_original=False)
+            print("    ✓ File saved successfully")
         
         return True, "Success", original_values, new_values
         
@@ -243,6 +261,7 @@ def verify_changes(
         verification_errors = []
         
         # Verify StudyInstanceUID
+        print("    → Verifying StudyInstanceUID...")
         if hasattr(ds, 'StudyInstanceUID'):
             current_uid = str(ds.StudyInstanceUID)
             if current_uid == original_values.get('StudyInstanceUID'):
@@ -251,20 +270,26 @@ def verify_changes(
                 verification_errors.append(f"StudyInstanceUID is not valid: {current_uid}")
             elif current_uid != new_values.get('StudyInstanceUID'):
                 verification_errors.append(f"StudyInstanceUID mismatch: expected {new_values.get('StudyInstanceUID')}, got {current_uid}")
+            else:
+                print("      ✓ StudyInstanceUID verified")
         else:
             verification_errors.append("StudyInstanceUID tag missing after update")
         
         # Verify AccessionNumber
+        print("    → Verifying AccessionNumber...")
         if hasattr(ds, 'AccessionNumber'):
             current_acc = str(ds.AccessionNumber)
             if current_acc == original_values.get('AccessionNumber'):
                 verification_errors.append("AccessionNumber did not change")
             elif current_acc != new_values.get('AccessionNumber'):
                 verification_errors.append(f"AccessionNumber mismatch: expected {new_values.get('AccessionNumber')}, got {current_acc}")
+            else:
+                print(f"      ✓ AccessionNumber verified: {current_acc}")
         else:
             verification_errors.append("AccessionNumber tag missing after update")
         
         # Verify SeriesInstanceUID
+        print("    → Verifying SeriesInstanceUID...")
         if hasattr(ds, 'SeriesInstanceUID'):
             current_series_uid = str(ds.SeriesInstanceUID)
             if current_series_uid == original_values.get('SeriesInstanceUID'):
@@ -273,6 +298,8 @@ def verify_changes(
                 verification_errors.append(f"SeriesInstanceUID is not valid: {current_series_uid}")
             elif current_series_uid != new_values.get('SeriesInstanceUID'):
                 verification_errors.append(f"SeriesInstanceUID mismatch: expected {new_values.get('SeriesInstanceUID')}, got {current_series_uid}")
+            else:
+                print("      ✓ SeriesInstanceUID verified")
         else:
             verification_errors.append("SeriesInstanceUID tag missing after update")
         
@@ -308,27 +335,51 @@ def process_folder(
         'verification_failed': 0
     }
     
+    # Normalize path for Windows (handle both forward and backslashes)
+    folder_path = os.path.normpath(folder_path)
+    
     # Validate folder exists
     if not os.path.exists(folder_path):
         print(f"Error: Folder does not exist: {folder_path}", file=sys.stderr)
+        print(f"  Resolved path: {os.path.abspath(folder_path)}", file=sys.stderr)
         return stats
     
     if not os.path.isdir(folder_path):
         print(f"Error: Path is not a directory: {folder_path}", file=sys.stderr)
         return stats
     
+    print("=" * 60)
+    print("DICOM TAG UPDATER")
+    print("=" * 60)
+    print(f"Processing folder: {folder_path}")
+    if verbose:
+        print(f"Absolute path: {os.path.abspath(folder_path)}")
+    print()
+    
     # Get all DICOM files
+    print("Searching for DICOM files...")
     dcm_files = get_dcm_files(folder_path)
     
     if not dcm_files:
         print(f"Warning: No DICOM files found in folder: {folder_path}", file=sys.stderr)
+        if verbose:
+            # List what files are actually in the directory
+            try:
+                files_in_dir = os.listdir(folder_path)
+                print(f"  Files in directory: {len(files_in_dir)} items")
+                if files_in_dir:
+                    print(f"  Sample files: {files_in_dir[:5]}")
+            except Exception as e:
+                print(f"  Could not list directory contents: {e}")
         return stats
     
     stats['total'] = len(dcm_files)
     
+    print("=" * 60)
     print(f"Found {stats['total']} DICOM file(s) to process")
     if dry_run:
-        print("DRY RUN MODE: Files will not be modified")
+        print("⚠ DRY RUN MODE: Files will not be modified")
+    print("=" * 60)
     print()
     
     # Process each file
@@ -345,14 +396,16 @@ def process_folder(
         )
         
         if not success:
-            print(f"  ERROR: {message}")
+            print(f"  ❌ ERROR: {message}")
             stats['failed'] += 1
+            print()
             continue
         
         stats['success'] += 1
         
         if not dry_run:
             # Verify changes
+            print("  Step 6: Verifying changes...")
             verify_success, verify_message = verify_changes(
                 dcm_file,
                 original_values,
@@ -360,14 +413,14 @@ def process_folder(
             )
             
             if not verify_success:
-                print(f"  VERIFICATION FAILED: {verify_message}")
+                print(f"  ❌ VERIFICATION FAILED: {verify_message}")
                 stats['verification_failed'] += 1
-            elif verbose:
-                print(f"  Verification: {verify_message}")
+            else:
+                print("  ✓ Verification passed: All tags updated correctly")
         else:
-            if verbose:
-                print("  (Skipping verification in dry-run mode)")
+            print("  ℹ Skipping verification in dry-run mode")
         
+        print(f"  ✓ File {idx}/{stats['total']} completed successfully")
         print()
     
     return stats

@@ -89,7 +89,31 @@ def is_valid_uid(uid: str) -> bool:
     return True
 
 
-def update_tag_recursively(ds, tag_tuple: Tuple, value, vr: str = None) -> int:
+def list_all_sequences(ds, path: str = "root", depth: int = 0) -> List[str]:
+    """
+    List all sequences in a dataset recursively.
+    
+    Args:
+        ds: pydicom Dataset object
+        path: Current path string
+        depth: Current depth level
+        
+    Returns:
+        List of sequence paths found
+    """
+    sequences = []
+    for elem in ds:
+        if elem.VR == "SQ" and elem.value:
+            seq_name = elem.keyword if elem.keyword else f"({elem.tag.group:04X},{elem.tag.element:04X})"
+            seq_path = f"{path}.{seq_name}"
+            sequences.append(f"{'  ' * depth}{seq_name} ({len(elem.value)} items)")
+            for idx, seq_item in enumerate(elem.value):
+                item_path = f"{seq_path}[{idx}]"
+                sequences.extend(list_all_sequences(seq_item, item_path, depth + 1))
+    return sequences
+
+
+def update_tag_recursively(ds, tag_tuple: Tuple, value, vr: str = None, path: str = "root", verbose: bool = False) -> int:
     """
     Recursively update a tag in the dataset and all nested sequences.
     
@@ -98,6 +122,8 @@ def update_tag_recursively(ds, tag_tuple: Tuple, value, vr: str = None) -> int:
         tag_tuple: Tuple of (group, element) for the tag, e.g. (0x0010, 0x0010)
         value: Value to set for the tag
         vr: Value Representation (e.g., 'PN', 'LO', 'DA') - required if adding new tag
+        path: Current path for debugging (e.g., "root.SequenceName[0]")
+        verbose: If True, print debug information
         
     Returns:
         Count of how many times the tag was updated
@@ -106,15 +132,20 @@ def update_tag_recursively(ds, tag_tuple: Tuple, value, vr: str = None) -> int:
     
     # Update at current level if tag exists
     if tag_tuple in ds:
+        old_value = ds[tag_tuple].value
         ds[tag_tuple].value = value
         count += 1
+        if verbose:
+            print(f"        [DEBUG] Updated {tag_tuple} at {path}: '{old_value}' → '{value}'")
     
     # Recursively search through all sequences
     for elem in ds:
         if elem.VR == "SQ" and elem.value:
+            seq_name = elem.keyword if elem.keyword else f"({elem.tag.group:04X},{elem.tag.element:04X})"
             # This is a sequence - iterate through its items
-            for seq_item in elem.value:
-                count += update_tag_recursively(seq_item, tag_tuple, value, vr)
+            for idx, seq_item in enumerate(elem.value):
+                item_path = f"{path}.{seq_name}[{idx}]"
+                count += update_tag_recursively(seq_item, tag_tuple, value, vr, item_path, verbose)
     
     return count
 
@@ -181,6 +212,16 @@ def update_dicom_file(
         # Get original values (stored but not displayed for security)
         original_values = get_original_values(ds)
         
+        # List all sequences in the file if verbose
+        if verbose:
+            sequences = list_all_sequences(ds)
+            if sequences:
+                print("  [Verbose] Sequences found in file:")
+                for seq in sequences:
+                    print(f"    {seq}")
+            else:
+                print("  [Verbose] No sequences found in file")
+        
         # Generate unique values
         print("  Step 1: Generating unique timestamp-based values...")
         new_study_uid = generate_uid()
@@ -212,9 +253,9 @@ def update_dicom_file(
             update_tags_ds(ds, "SeriesInstanceUID", new_series_uid)
             
             # Also update recursively in sequences
-            study_uid_count = update_tag_recursively(ds, (0x0020, 0x000D), new_study_uid, 'UI')
-            accession_count = update_tag_recursively(ds, (0x0008, 0x0050), new_accession_number, 'SH')
-            series_uid_count = update_tag_recursively(ds, (0x0020, 0x000E), new_series_uid, 'UI')
+            study_uid_count = update_tag_recursively(ds, (0x0020, 0x000D), new_study_uid, 'UI', "root", verbose)
+            accession_count = update_tag_recursively(ds, (0x0008, 0x0050), new_accession_number, 'SH', "root", verbose)
+            series_uid_count = update_tag_recursively(ds, (0x0020, 0x000E), new_series_uid, 'UI', "root", verbose)
             print(f"    ✓ StudyInstanceUID updated in {study_uid_count} location(s)")
             print(f"    ✓ AccessionNumber updated in {accession_count} location(s)")
             print(f"    ✓ SeriesInstanceUID updated in {series_uid_count} location(s)")
@@ -228,7 +269,7 @@ def update_dicom_file(
                 old_patient_id = str(ds[0x0010, 0x0020].value)
             if (0x0010, 0x0020) not in ds:
                 ds.add_new((0x0010, 0x0020), 'LO', "11043207")
-            patient_id_count = update_tag_recursively(ds, (0x0010, 0x0020), "11043207", 'LO')
+            patient_id_count = update_tag_recursively(ds, (0x0010, 0x0020), "11043207", 'LO', "root", verbose)
             print(f"    ✓ PatientID (0010,0020) updated in {patient_id_count} location(s): {old_patient_id} → 11043207")
             
             # PatientName - (0010,0010) PN (Person Name)
@@ -237,7 +278,7 @@ def update_dicom_file(
                 old_patient_name = str(ds[0x0010, 0x0010].value)
             if (0x0010, 0x0010) not in ds:
                 ds.add_new((0x0010, 0x0010), 'PN', "ZZTESTPATIENT^MIDIA THREE")
-            patient_name_count = update_tag_recursively(ds, (0x0010, 0x0010), "ZZTESTPATIENT^MIDIA THREE", 'PN')
+            patient_name_count = update_tag_recursively(ds, (0x0010, 0x0010), "ZZTESTPATIENT^MIDIA THREE", 'PN', "root", verbose)
             print(f"    ✓ PatientName (0010,0010) updated in {patient_name_count} location(s): {old_patient_name} → ZZTESTPATIENT^MIDIA THREE")
             
             # PatientBirthDate - (0010,0030) DA (Date)
@@ -246,7 +287,7 @@ def update_dicom_file(
                 old_birth_date = str(ds[0x0010, 0x0030].value)
             if (0x0010, 0x0030) not in ds:
                 ds.add_new((0x0010, 0x0030), 'DA', "19010101")
-            birth_date_count = update_tag_recursively(ds, (0x0010, 0x0030), "19010101", 'DA')
+            birth_date_count = update_tag_recursively(ds, (0x0010, 0x0030), "19010101", 'DA', "root", verbose)
             print(f"    ✓ PatientBirthDate (0010,0030) updated in {birth_date_count} location(s): {old_birth_date} → 19010101")
             
             # InstitutionName - (0008,0080) LO (Long String)
@@ -255,7 +296,7 @@ def update_dicom_file(
                 old_institution = str(ds[0x0008, 0x0080].value)
             if (0x0008, 0x0080) not in ds:
                 ds.add_new((0x0008, 0x0080), 'LO', "TEST FACILITY")
-            institution_count = update_tag_recursively(ds, (0x0008, 0x0080), "TEST FACILITY", 'LO')
+            institution_count = update_tag_recursively(ds, (0x0008, 0x0080), "TEST FACILITY", 'LO', "root", verbose)
             print(f"    ✓ InstitutionName (0008,0080) updated in {institution_count} location(s): {old_institution} → TEST FACILITY")
             
             # ReferringPhysicianName - (0008,0090) PN (Person Name)
@@ -264,11 +305,11 @@ def update_dicom_file(
                 old_referring_physician = str(ds[0x0008, 0x0090].value)
             if (0x0008, 0x0090) not in ds:
                 ds.add_new((0x0008, 0x0090), 'PN', "TEST PROVIDER")
-            referring_count = update_tag_recursively(ds, (0x0008, 0x0090), "TEST PROVIDER", 'PN')
+            referring_count = update_tag_recursively(ds, (0x0008, 0x0090), "TEST PROVIDER", 'PN', "root", verbose)
             print(f"    ✓ ReferringPhysicianName (0008,0090) updated in {referring_count} location(s): {old_referring_physician} → TEST PROVIDER")
             
             # Also try private tag (0808,0090) if it exists in sequences
-            private_referring_count = update_tag_recursively(ds, (0x0808, 0x0090), "TEST PROVIDER", 'PN')
+            private_referring_count = update_tag_recursively(ds, (0x0808, 0x0090), "TEST PROVIDER", 'PN', "root", verbose)
             if private_referring_count > 0:
                 print(f"    ✓ ReferringPhysicianName (0808,0090) updated in {private_referring_count} location(s)")
             

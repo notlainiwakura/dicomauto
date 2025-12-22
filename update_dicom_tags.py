@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-Standalone script to update DICOM tags in all files within a specified folder.
+Standalone script to update DICOM tags in a single file or all files within a folder.
 
 This script processes DICOM files and updates critical tags with unique timestamp-based
 values, including StudyInstanceUID, AccessionNumber, and SeriesInstanceUID. It also
 updates other test tags as specified and verifies all changes are valid.
 
 Usage:
-    python update_dicom_tags.py <folder_path> [--verbose] [--dry-run]
+    python update_dicom_tags.py <file_or_folder_path> [--verbose] [--dry-run]
+    
+Examples:
+    python update_dicom_tags.py /path/to/file.dcm           # Single file
+    python update_dicom_tags.py /path/to/dicom/folder       # All files in folder
 """
 
 import argparse
@@ -415,16 +419,16 @@ def verify_changes(
         return False, f"Verification error: {e}"
 
 
-def process_folder(
-    folder_path: str,
+def process_path(
+    input_path: str,
     dry_run: bool = False,
     verbose: bool = False
 ) -> Dict[str, int]:
     """
-    Process all DICOM files in a folder.
+    Process DICOM file(s) from a file or folder path.
     
     Args:
-        folder_path: Path to folder containing DICOM files
+        input_path: Path to a single DICOM file or folder containing DICOM files
         dry_run: If True, don't actually modify files
         verbose: If True, print detailed information
         
@@ -439,41 +443,51 @@ def process_folder(
     }
     
     # Normalize path for Windows (handle both forward and backslashes)
-    folder_path = os.path.normpath(folder_path)
+    input_path = os.path.normpath(input_path)
     
-    # Validate folder exists
-    if not os.path.exists(folder_path):
-        print(f"Error: Folder does not exist: {folder_path}", file=sys.stderr)
-        print(f"  Resolved path: {os.path.abspath(folder_path)}", file=sys.stderr)
-        return stats
-    
-    if not os.path.isdir(folder_path):
-        print(f"Error: Path is not a directory: {folder_path}", file=sys.stderr)
+    # Validate path exists
+    if not os.path.exists(input_path):
+        print(f"Error: Path does not exist: {input_path}", file=sys.stderr)
+        print(f"  Resolved path: {os.path.abspath(input_path)}", file=sys.stderr)
         return stats
     
     print("=" * 60)
     print("DICOM TAG UPDATER")
     print("=" * 60)
-    print(f"Processing folder: {folder_path}")
-    if verbose:
-        print(f"Absolute path: {os.path.abspath(folder_path)}")
-    print()
     
-    # Get all DICOM files
-    print("Searching for DICOM files...")
-    dcm_files = get_dcm_files(folder_path)
-    
-    if not dcm_files:
-        print(f"Warning: No DICOM files found in folder: {folder_path}", file=sys.stderr)
+    # Determine if input is a file or directory
+    if os.path.isfile(input_path):
+        # Single file mode
+        print(f"Processing single file: {input_path}")
         if verbose:
-            # List what files are actually in the directory
-            try:
-                files_in_dir = os.listdir(folder_path)
-                print(f"  Files in directory: {len(files_in_dir)} items")
-                if files_in_dir:
-                    print(f"  Sample files: {files_in_dir[:5]}")
-            except Exception as e:
-                print(f"  Could not list directory contents: {e}")
+            print(f"Absolute path: {os.path.abspath(input_path)}")
+        print()
+        dcm_files = [input_path]
+    elif os.path.isdir(input_path):
+        # Directory mode
+        print(f"Processing folder: {input_path}")
+        if verbose:
+            print(f"Absolute path: {os.path.abspath(input_path)}")
+        print()
+        
+        # Get all DICOM files
+        print("Searching for DICOM files...")
+        dcm_files = get_dcm_files(input_path)
+        
+        if not dcm_files:
+            print(f"Warning: No DICOM files found in folder: {input_path}", file=sys.stderr)
+            if verbose:
+                # List what files are actually in the directory
+                try:
+                    files_in_dir = os.listdir(input_path)
+                    print(f"  Files in directory: {len(files_in_dir)} items")
+                    if files_in_dir:
+                        print(f"  Sample files: {files_in_dir[:5]}")
+                except Exception as e:
+                    print(f"  Could not list directory contents: {e}")
+            return stats
+    else:
+        print(f"Error: Path is neither a file nor a directory: {input_path}", file=sys.stderr)
         return stats
     
     stats['total'] = len(dcm_files)
@@ -532,20 +546,21 @@ def process_folder(
 def main():
     """Main entry point for the script."""
     parser = argparse.ArgumentParser(
-        description='Update DICOM tags in all files within a specified folder.',
+        description='Update DICOM tags in a single file or all files within a folder.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python update_dicom_tags.py /path/to/dicom/folder
+  python update_dicom_tags.py /path/to/file.dcm              # Single file
+  python update_dicom_tags.py /path/to/dicom/folder          # All files in folder
   python update_dicom_tags.py /path/to/dicom/folder --verbose
-  python update_dicom_tags.py /path/to/dicom/folder --dry-run
+  python update_dicom_tags.py /path/to/file.dcm --dry-run
         """
     )
     
     parser.add_argument(
-        'folder',
+        'path',
         type=str,
-        help='Path to folder containing DICOM files'
+        help='Path to a single DICOM file or folder containing DICOM files'
     )
     
     parser.add_argument(
@@ -562,9 +577,9 @@ Examples:
     
     args = parser.parse_args()
     
-    # Process the folder
-    stats = process_folder(
-        args.folder,
+    # Process the file or folder
+    stats = process_path(
+        args.path,
         dry_run=args.dry_run,
         verbose=args.verbose
     )

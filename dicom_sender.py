@@ -41,10 +41,11 @@ class DicomSender:
 
     def _build_ae(self) -> AE:
         ae = AE(ae_title=self.endpoint.local_ae_title.encode("ascii", "ignore"))
-        # AllStoragePresentationContexts is already a list of PresentationContext objects
-        # Limit to 127 to leave room for Verification context (DICOM max is 128)
-        ae.requested_contexts = AllStoragePresentationContexts[:127]
-        # Add Verification context for C-ECHO
+        # Add storage presentation contexts (limit to 127 to leave room for Verification)
+        storage_contexts = list(AllStoragePresentationContexts)[:127]
+        for context in storage_contexts:
+            ae.requested_contexts.append(context)
+        # Add Verification context for C-ECHO (total = 128 max)
         ae.add_requested_context(Verification)
         return ae
 

@@ -41,7 +41,10 @@ class DicomSender:
 
     def _build_ae(self) -> AE:
         ae = AE(ae_title=self.endpoint.local_ae_title.encode("ascii", "ignore"))
-        ae.requested_contexts = list(AllStoragePresentationContexts) + [Verification]
+        # Limit presentation contexts to avoid exceeding DICOM's 128 context limit
+        # Use only the first 127 storage contexts, leaving room for Verification
+        contexts = list(AllStoragePresentationContexts)[:127]
+        ae.requested_contexts = contexts + [Verification]
         return ae
 
     def _send_single_dataset(
@@ -158,7 +161,7 @@ class DicomSender:
         Lightweight Verification (C-ECHO) ping to check Compass reachability.
         """
         ae = self._build_ae()
-        ae.requested_contexts.append(Verification)
+        # Verification is already included in _build_ae(), no need to append again
         try:
             assoc = ae.associate(
                 self.endpoint.host,

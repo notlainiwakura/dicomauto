@@ -53,20 +53,35 @@ class DicomEndpointConfig:
 class LoadProfileConfig:
     """High-level load profile settings."""
 
-    peak_images_per_second: int = _env_int("PEAK_IMAGES_PER_SECOND", 50)
-    load_multiplier: float = float(os.getenv("LOAD_MULTIPLIER", "3.0"))
-    test_duration_seconds: int = _env_int("TEST_DURATION_SECONDS", 300)
-    concurrency: int = _env_int("LOAD_CONCURRENCY", 8)
+    peak_images_per_second: int
+    load_multiplier: float
+    test_duration_seconds: int
+    concurrency: int
+
+    @classmethod
+    def from_env(cls) -> "LoadProfileConfig":
+        return cls(
+            peak_images_per_second=_env_int("PEAK_IMAGES_PER_SECOND", 50),
+            load_multiplier=float(os.getenv("LOAD_MULTIPLIER", "3.0")),
+            test_duration_seconds=_env_int("TEST_DURATION_SECONDS", 300),
+            concurrency=_env_int("LOAD_CONCURRENCY", 8),
+        )
 
 
 @dataclass
 class DatasetConfig:
     """Location of DICOM data on disk for replay."""
 
-    dicom_root_dir: Path = Path(
-        _env_str("DICOM_ROOT_DIR", "./dicom_samples")
-    ).resolve()
+    dicom_root_dir: Path
     recursive: bool = True
+
+    @classmethod
+    def from_env(cls) -> "DatasetConfig":
+        dicom_root = _env_str("DICOM_ROOT_DIR", "./dicom_samples")
+        return cls(
+            dicom_root_dir=Path(dicom_root).resolve(),
+            recursive=True,
+        )
 
 
 @dataclass
@@ -81,6 +96,6 @@ class PerfConfig:
     def from_env(cls) -> "PerfConfig":
         return cls(
             endpoint=DicomEndpointConfig.from_env(),
-            load_profile=LoadProfileConfig(),
-            dataset=DatasetConfig(),
+            load_profile=LoadProfileConfig.from_env(),
+            dataset=DatasetConfig.from_env(),
         )

@@ -22,12 +22,39 @@ from typing import Iterable, List
 import pydicom
 
 
+def is_dicom_file(path: Path) -> bool:
+    """
+    Check if a file is a valid DICOM file by verifying the DICOM magic string.
+    
+    DICOM files have a 128-byte preamble followed by the 'DICM' magic string.
+    This function performs a quick check without fully parsing the file.
+    
+    Args:
+        path: Path to the file to check
+        
+    Returns:
+        True if the file has the DICOM magic string, False otherwise
+    """
+    try:
+        with open(path, 'rb') as f:
+            f.seek(128)  # Skip to byte 128 (end of preamble)
+            magic = f.read(4)  # Read 4 bytes for 'DICM'
+            return magic == b'DICM'
+    except (IOError, OSError):
+        # File can't be read or is too small
+        return False
+
+
 def find_dicom_files(root: Path, recursive: bool = True) -> List[Path]:
     """
     Find DICOM files under the given root directory.
-
-    We keep this simple and assume: "one file per dataset",
-    using the production-style .dcm layout.
+    
+    This function validates each file to ensure it contains the DICOM magic string
+    before including it in the results. This prevents non-DICOM files from being
+    processed, regardless of their file extension.
+    
+    Note: Supports DICOM files with any extension or no extension at all,
+    as DICOM files are identified by their internal structure, not filename.
     """
     if not root.exists():
         raise FileNotFoundError(f"DICOM root directory does not exist: {root}")
@@ -39,6 +66,10 @@ def find_dicom_files(root: Path, recursive: bool = True) -> List[Path]:
             continue
 
         if path.name.startswith("."):
+            continue
+
+        # Validate that the file is actually a DICOM file
+        if not is_dicom_file(path):
             continue
 
         files.append(path)

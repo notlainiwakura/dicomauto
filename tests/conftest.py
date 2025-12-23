@@ -6,11 +6,17 @@ Works with flat project structure - compass_perf modules in root directory.
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import List
 
 import pytest
 from dotenv import load_dotenv
+
+# Add project root to Python path to ensure modules can be imported
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # Import from root-level modules (compass_perf contents moved to root)
 from config import PerfConfig
@@ -19,7 +25,6 @@ from dicom_sender import DicomSender
 from metrics import PerfMetrics
 
 # Load .env file from project root
-project_root = Path(__file__).resolve().parent.parent
 dotenv_path = project_root / ".env"
 
 if dotenv_path.exists():

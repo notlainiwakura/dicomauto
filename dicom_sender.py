@@ -19,7 +19,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Iterable, Optional
 
-from pynetdicom import AE, AllStoragePresentationContexts, build_context
+from pynetdicom import AE, AllStoragePresentationContexts
 from pynetdicom.sop_class import Verification
 
 from config import DicomEndpointConfig, LoadProfileConfig
@@ -41,11 +41,11 @@ class DicomSender:
 
     def _build_ae(self) -> AE:
         ae = AE(ae_title=self.endpoint.local_ae_title.encode("ascii", "ignore"))
-        # Limit presentation contexts to avoid exceeding DICOM's 128 context limit
-        # Use only the first 127 storage contexts, leaving room for Verification
-        contexts = list(AllStoragePresentationContexts)[:127]
-        contexts.append(build_context(Verification))
-        ae.requested_contexts = contexts
+        # AllStoragePresentationContexts is already a list of PresentationContext objects
+        # Limit to 127 to leave room for Verification context (DICOM max is 128)
+        ae.requested_contexts = AllStoragePresentationContexts[:127]
+        # Add Verification context for C-ECHO
+        ae.add_requested_context(Verification)
         return ae
 
     def _send_single_dataset(

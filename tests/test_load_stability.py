@@ -9,14 +9,9 @@ stability and performance.
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 from metrics import PerfMetrics
-
-MAX_ERROR_RATE = float(os.getenv("MAX_ERROR_RATE", "0.02"))
-MAX_P95_LATENCY_MS = float(os.getenv("MAX_P95_LATENCY_MS", "2000"))
 
 
 @pytest.mark.load
@@ -44,14 +39,18 @@ def test_load_stability_3x_peak(
     assert total_sent > 0, "No messages were sent during load test"
     assert metrics.total == total_sent, "Mismatch total_sent vs metrics.total"
 
+    # Use thresholds from config
+    max_error_rate = perf_config.thresholds.max_error_rate
+    max_p95_latency = perf_config.thresholds.max_p95_latency_ms
+
     assert (
-        metrics.error_rate <= MAX_ERROR_RATE
-    ), f"Error rate too high: {metrics.error_rate:.3f} > {MAX_ERROR_RATE:.3f}"
+        metrics.error_rate <= max_error_rate
+    ), f"Error rate too high: {metrics.error_rate:.3f} > {max_error_rate:.3f}"
 
     p95 = metrics.p95_latency_ms
     assert (
-        p95 is not None and p95 <= MAX_P95_LATENCY_MS
-    ), f"p95 latency too high: {p95} ms > {MAX_P95_LATENCY_MS} ms"
+        p95 is not None and p95 <= max_p95_latency
+    ), f"p95 latency too high: {p95} ms > {max_p95_latency} ms"
 
     print("Load stability snapshot:", snapshot)
 

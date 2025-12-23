@@ -12,7 +12,6 @@ These focus on:
 from __future__ import annotations
 
 import itertools
-import os
 import tempfile
 import shutil
 from datetime import datetime
@@ -23,9 +22,6 @@ from pydicom import dcmread
 from pydicom.uid import generate_uid
 
 from metrics import PerfMetrics
-
-MAX_ERROR_RATE = float(os.getenv("MAX_ERROR_RATE", "0.02"))
-MAX_P95_LATENCY_MS = float(os.getenv("MAX_P95_LATENCY_MS_SHORT", "1500"))
 
 
 def generate_accession_number() -> str:
@@ -135,14 +131,18 @@ def test_routing_throughput_under_peak_plus(
         actual_rate >= 0.95 * target_peak
     ), f"Effective throughput {actual_rate:.2f}/s is below 95 percent of target {target_peak:.2f}/s"
 
+    # Use thresholds from config
+    max_error_rate = perf_config.thresholds.max_error_rate
+    max_p95_latency = perf_config.thresholds.max_p95_latency_ms_short
+
     assert (
-        metrics.error_rate <= MAX_ERROR_RATE
-    ), f"Error rate too high: {metrics.error_rate:.3f} > {MAX_ERROR_RATE:.3f}"
+        metrics.error_rate <= max_error_rate
+    ), f"Error rate too high: {metrics.error_rate:.3f} > {max_error_rate:.3f}"
 
     p95 = metrics.p95_latency_ms
     assert (
-        p95 is not None and p95 <= MAX_P95_LATENCY_MS
-    ), f"p95 latency too high: {p95} ms > {MAX_P95_LATENCY_MS} ms"
+        p95 is not None and p95 <= max_p95_latency
+    ), f"p95 latency too high: {p95} ms > {max_p95_latency} ms"
 
     print(f"\n[SUCCESS] Sent {total_sent} anonymized files with unique IDs")
     print("Throughput snapshot:", snapshot)

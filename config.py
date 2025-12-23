@@ -1,10 +1,15 @@
-# compass_perf/config.py
+# config.py
 
 """
-Central configuration for Compass performance/load tests.
+Central configuration for ALL Compass tests.
 
-Values may be overridden with environment variables so that
-the same code can be reused across environments.
+Handles configuration for:
+- Load/performance tests
+- Integration/functional tests
+- Transformation validation tests
+- Calling AET routing tests
+
+Values may be overridden with environment variables (.env file).
 """
 
 from __future__ import annotations
@@ -15,12 +20,18 @@ from pathlib import Path
 from typing import Optional
 
 
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
 def _env_str(name: str, default: Optional[str] = None) -> Optional[str]:
+    """Safely read string environment variable."""
     value = os.getenv(name)
     return value if value is not None else default
 
 
 def _env_int(name: str, default: int) -> int:
+    """Safely read integer environment variable with fallback."""
     value = os.getenv(name)
     if value is None:
         return default
@@ -30,14 +41,33 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    """Safely read float environment variable with fallback."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
+# ============================================================================
+# Configuration Classes
+# ============================================================================
+
+
 @dataclass
 class DicomEndpointConfig:
-    """Configuration for a single DICOM destination (Compass listener)."""
-
+    """
+    DICOM connection configuration - WHERE to send data.
+    
+    Used by: All tests
+    """
     host: str
     port: int
-    remote_ae_title: str
-    local_ae_title: str = "PERF_SENDER"
+    remote_ae_title: str  # Compass's AE Title (called AET)
+    local_ae_title: str   # Default calling AE Title (can be overridden per test)
 
     @classmethod
     def from_env(cls) -> "DicomEndpointConfig":
@@ -51,8 +81,11 @@ class DicomEndpointConfig:
 
 @dataclass
 class LoadProfileConfig:
-    """High-level load profile settings."""
-
+    """
+    Load testing configuration - HOW HARD to stress test.
+    
+    Used by: Load tests (test_load_stability, test_routing_throughput)
+    """
     peak_images_per_second: int
     load_multiplier: float
     test_duration_seconds: int
@@ -62,7 +95,7 @@ class LoadProfileConfig:
     def from_env(cls) -> "LoadProfileConfig":
         return cls(
             peak_images_per_second=_env_int("PEAK_IMAGES_PER_SECOND", 50),
-            load_multiplier=float(os.getenv("LOAD_MULTIPLIER", "3.0")),
+            load_multiplier=_env_float("LOAD_MULTIPLIER", 3.0),
             test_duration_seconds=_env_int("TEST_DURATION_SECONDS", 300),
             concurrency=_env_int("LOAD_CONCURRENCY", 8),
         )
@@ -70,8 +103,11 @@ class LoadProfileConfig:
 
 @dataclass
 class DatasetConfig:
-    """Location of DICOM data on disk for replay."""
-
+    """
+    Test data location configuration - WHAT to send.
+    
+    Used by: All tests
+    """
     dicom_root_dir: Path
     recursive: bool = True
 
@@ -85,17 +121,81 @@ class DatasetConfig:
 
 
 @dataclass
-class PerfConfig:
-    """Top-level configuration object for perf tests."""
+class PerformanceThresholdsConfig:
+    """
+    Performance acceptance criteria - WHAT defines success.
+    
+    Used by: Load tests for pass/fail criteria
+    """
+    max_error_rate: float  # Maximum acceptable error rate (e.g., 0.02 = 2%)
+    max_p95_latency_ms: float  # Maximum p95 latency for stability tests
+    max_p95_latency_ms_short: float  # Maximum p95 latency for throughput tests
 
+    @classmethod
+    def from_env(cls) -> "PerformanceThresholdsConfig":
+        return cls(
+            max_error_rate=_env_float("MAX_ERROR_RATE", 0.02),
+            max_p95_latency_ms=_env_float("MAX_P95_LATENCY_MS", 2000.0),
+            max_p95_latency_ms_short=_env_float("MAX_P95_LATENCY_MS_SHORT", 1500.0),
+        )
+
+
+@dataclass
+class IntegrationTestConfig:
+    """
+    Configuration specific to integration/functional tests.
+    
+    Used by: Integration tests (test_anonymize_and_send, etc.)
+    """
+    test_dicom_file: Optional[str] = None  # Specific file for anonymize test
+
+    @classmethod
+    def from_env(cls) -> "IntegrationTestConfig":
+        return cls(
+            test_dicom_file=_env_str("TEST_DICOM_FILE", None),
+        )
+
+
+# ============================================================================
+# Master Configuration
+# ============================================================================
+
+@dataclass
+class TestConfig:
+    """
+    Master configuration object for ALL tests.
+    
+    This is the single source of truth for configuration.
+    Use TestConfig.from_env() to load all settings at once.
+    
+    Structure:
+    - endpoint: Connection to Compass (WHERE)
+    - load_profile: Stress testing parameters (HOW HARD)
+    - dataset: Test data location (WHAT)
+    - thresholds: Performance acceptance criteria (SUCCESS CRITERIA)
+    - integration: Integration test specific settings
+    """
     endpoint: DicomEndpointConfig
     load_profile: LoadProfileConfig
     dataset: DatasetConfig
+    thresholds: PerformanceThresholdsConfig
+    integration: IntegrationTestConfig
 
     @classmethod
-    def from_env(cls) -> "PerfConfig":
+    def from_env(cls) -> "TestConfig":
+        """Load complete configuration from environment variables."""
         return cls(
             endpoint=DicomEndpointConfig.from_env(),
             load_profile=LoadProfileConfig.from_env(),
             dataset=DatasetConfig.from_env(),
+            thresholds=PerformanceThresholdsConfig.from_env(),
+            integration=IntegrationTestConfig.from_env(),
         )
+
+
+# ============================================================================
+# Backward Compatibility Aliases
+# ============================================================================
+
+# Keep PerfConfig as alias for backward compatibility with existing code
+PerfConfig = TestConfig

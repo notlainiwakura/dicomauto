@@ -225,11 +225,10 @@ def test_anonymize_and_send_single_file(
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("input_file_env_var", ["TEST_DICOM_FILE"])
 def test_anonymize_and_send_from_shared_drive(
     dicom_sender: DicomSender,
     metrics: PerfMetrics,
-    input_file_env_var: str,
+    perf_config,
 ):
     """
     Integration test using a file path from environment variable.
@@ -240,10 +239,10 @@ def test_anonymize_and_send_from_shared_drive(
     
     This test is useful for testing with specific files from network shares.
     """
-    input_file = os.getenv(input_file_env_var)
+    input_file = perf_config.integration.test_dicom_file
     
     if not input_file:
-        pytest.skip(f"Environment variable {input_file_env_var} not set")
+        pytest.skip("TEST_DICOM_FILE environment variable not set")
     
     if not os.path.exists(input_file):
         pytest.fail(f"Input file does not exist: {input_file}")

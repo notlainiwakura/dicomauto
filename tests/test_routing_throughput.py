@@ -11,14 +11,83 @@ These focus on:
 
 from __future__ import annotations
 
+import itertools
 import os
+import tempfile
+import shutil
+from datetime import datetime
+from typing import Tuple
 
 import pytest
+from pydicom import dcmread
+from pydicom.uid import generate_uid
 
 from metrics import PerfMetrics
 
 MAX_ERROR_RATE = float(os.getenv("MAX_ERROR_RATE", "0.02"))
 MAX_P95_LATENCY_MS = float(os.getenv("MAX_P95_LATENCY_MS_SHORT", "1500"))
+
+
+def generate_accession_number() -> str:
+    """Generate a unique accession number based on current timestamp."""
+    now = datetime.now()
+    microseconds = now.microsecond
+    return f"{now.strftime('%Y%m%d-%H%M%S')}-{microseconds:06d}"
+
+
+def update_tag_recursively(ds, tag_tuple: Tuple, value, vr: str = None) -> int:
+    """Recursively update a tag in the dataset and all nested sequences."""
+    count = 0
+    
+    if tag_tuple in ds:
+        ds[tag_tuple].value = value
+        count += 1
+    
+    for elem in ds:
+        if elem.VR == "SQ" and elem.value:
+            for seq_item in elem.value:
+                count += update_tag_recursively(seq_item, tag_tuple, value, vr)
+    
+    return count
+
+
+def create_anonymized_variant(ds):
+    """
+    Create an anonymized copy of a dataset with unique UIDs.
+    Returns a new dataset object (doesn't modify original).
+    """
+    # Create a deep copy by re-reading if possible, otherwise use as-is
+    if hasattr(ds, 'filename') and ds.filename:
+        ds_copy = dcmread(ds.filename)
+    else:
+        # If no filename, work with the dataset directly (it's already loaded)
+        # We'll need to work with it as-is since we can't deep copy easily
+        ds_copy = ds
+    
+    # Generate new unique identifiers
+    new_study_uid = generate_uid()
+    new_accession_number = generate_accession_number()
+    new_series_uid = generate_uid()
+    new_sop_instance_uid = generate_uid()
+    
+    # Update UIDs
+    if (0x0020, 0x000d) not in ds_copy:
+        ds_copy.add_new((0x0020, 0x000d), 'UI', new_study_uid)
+    update_tag_recursively(ds_copy, (0x0020, 0x000d), new_study_uid, 'UI')
+    
+    if (0x0008, 0x0050) not in ds_copy:
+        ds_copy.add_new((0x0008, 0x0050), 'SH', new_accession_number)
+    update_tag_recursively(ds_copy, (0x0008, 0x0050), new_accession_number, 'SH')
+    
+    if (0x0020, 0x000e) not in ds_copy:
+        ds_copy.add_new((0x0020, 0x000e), 'UI', new_series_uid)
+    update_tag_recursively(ds_copy, (0x0020, 0x000e), new_series_uid, 'UI')
+    
+    if (0x0008, 0x0018) not in ds_copy:
+        ds_copy.add_new((0x0008, 0x0018), 'UI', new_sop_instance_uid)
+    update_tag_recursively(ds_copy, (0x0008, 0x0018), new_sop_instance_uid, 'UI')
+    
+    return ds_copy
 
 
 @pytest.mark.load
@@ -32,14 +101,25 @@ def test_routing_throughput_under_peak_plus(
 ):
     """
     Push Compass to 150 percent and 200 percent of configured peak_images_per_second.
+    Now with anonymization - each send gets unique UIDs even from a single file.
     """
     assert dicom_sender.ping(), "Compass did not respond to C-ECHO ping"
 
     target_peak = perf_config.load_profile.peak_images_per_second * multiplier
     duration = perf_config.load_profile.test_duration_seconds
 
+    # Create anonymized variants generator
+    # This will continuously create new anonymized copies with unique UIDs
+    def anonymized_dataset_generator():
+        for ds in itertools.cycle(dicom_datasets):
+            yield create_anonymized_variant(ds)
+    
+    print(f"\n[INFO] Starting throughput test with {multiplier}x multiplier")
+    print(f"[INFO] Each file will be anonymized with unique UIDs before sending")
+    print(f"[INFO] Source files: {len(dicom_datasets)}")
+    
     total_sent = dicom_sender.load_test_for_duration(
-        datasets=dicom_datasets,
+        datasets=anonymized_dataset_generator(),
         metrics=metrics,
         duration_seconds=duration,
         concurrency=perf_config.load_profile.concurrency,
@@ -64,5 +144,6 @@ def test_routing_throughput_under_peak_plus(
         p95 is not None and p95 <= MAX_P95_LATENCY_MS
     ), f"p95 latency too high: {p95} ms > {MAX_P95_LATENCY_MS} ms"
 
+    print(f"\n[SUCCESS] Sent {total_sent} anonymized files with unique IDs")
     print("Throughput snapshot:", snapshot)
 

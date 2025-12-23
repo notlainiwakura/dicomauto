@@ -191,11 +191,3 @@ class TestConfig:
             thresholds=PerformanceThresholdsConfig.from_env(),
             integration=IntegrationTestConfig.from_env(),
         )
-
-
-# ============================================================================
-# Backward Compatibility Aliases
-# ============================================================================
-
-# Keep PerfConfig as alias for backward compatibility with existing code
-PerfConfig = TestConfig

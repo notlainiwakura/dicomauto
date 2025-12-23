@@ -83,8 +83,8 @@ cp compass_perf/dicom_sender.py .
 cp compass_perf/metrics.py .
 
 # Fix imports in dicom_sender.py
-# Change: from .config import PerfConfig
-# To:     from config import PerfConfig
+# Change: from .config import TestConfig
+# To:     from config import TestConfig
 ```
 
 ### Issue 2: Running from Wrong Directory

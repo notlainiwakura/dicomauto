@@ -19,7 +19,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Import from root-level modules (compass_perf contents moved to root)
-from config import PerfConfig
+from config import TestConfig
 from data_loader import find_dicom_files, load_dataset
 from dicom_sender import DicomSender
 from metrics import PerfMetrics
@@ -34,14 +34,14 @@ else:
 
 
 @pytest.fixture(scope="session")
-def perf_config() -> PerfConfig:
+def perf_config() -> TestConfig:
     """Performance configuration from environment variables."""
-    cfg = PerfConfig.from_env()
+    cfg = TestConfig.from_env()
     return cfg
 
 
 @pytest.fixture(scope="session")
-def dicom_files(perf_config: PerfConfig) -> List[Path]:
+def dicom_files(perf_config: TestConfig) -> List[Path]:
     """List of DICOM files for testing."""
     return find_dicom_files(
         perf_config.dataset.dicom_root_dir,
@@ -62,7 +62,7 @@ def metrics() -> PerfMetrics:
 
 
 @pytest.fixture(scope="session")
-def dicom_sender(perf_config: PerfConfig) -> DicomSender:
+def dicom_sender(perf_config: TestConfig) -> DicomSender:
     """DICOM sender for C-STORE operations."""
     return DicomSender(
         endpoint=perf_config.endpoint,

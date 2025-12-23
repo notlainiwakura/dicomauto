@@ -2,7 +2,7 @@
 
 """
 Global pytest fixtures for testing.
-Works with flat project structure (no compass_perf module).
+Works with flat project structure - compass_perf modules in root directory.
 """
 
 import os
@@ -11,6 +11,12 @@ from typing import List
 
 import pytest
 from dotenv import load_dotenv
+
+# Import from root-level modules (compass_perf contents moved to root)
+from config import PerfConfig
+from data_loader import find_dicom_files, load_dataset
+from dicom_sender import DicomSender
+from metrics import PerfMetrics
 
 # Load .env file from project root
 project_root = Path(__file__).resolve().parent.parent
@@ -23,37 +29,56 @@ else:
 
 
 @pytest.fixture(scope="session")
-def compass_config():
-    """Configuration for Compass server connection."""
-    return {
-        'host': os.getenv('COMPASS_HOST', '129.176.169.25'),
-        'port': int(os.getenv('COMPASS_PORT', '11112')),
-        'ae_title': os.getenv('COMPASS_AE_TITLE', 'COMPASS'),
-        'local_ae_title': os.getenv('LOCAL_AE_TITLE', 'TEST_SENDER')
-    }
+def perf_config() -> PerfConfig:
+    """Performance configuration from environment variables."""
+    cfg = PerfConfig.from_env()
+    return cfg
 
 
 @pytest.fixture(scope="session")
-def dicom_root_dir():
-    """Root directory containing DICOM test files."""
-    root = os.getenv('DICOM_ROOT_DIR', './dicom_samples')
-    return Path(root).resolve()
-
-
-@pytest.fixture(scope="session")
-def dicom_files(dicom_root_dir):
+def dicom_files(perf_config: PerfConfig) -> List[Path]:
     """List of DICOM files for testing."""
-    from dcmutl import get_dcm_files
-    
-    files = get_dcm_files(str(dicom_root_dir))
-    if not files:
-        pytest.skip(f"No DICOM files found in {dicom_root_dir}")
-    
-    return [Path(f) for f in files]
+    return find_dicom_files(
+        perf_config.dataset.dicom_root_dir,
+        recursive=perf_config.dataset.recursive,
+    )
+
+
+@pytest.fixture(scope="session")
+def dicom_datasets(dicom_files: List[Path]):
+    """Loaded DICOM datasets."""
+    return [load_dataset(p) for p in dicom_files]
+
+
+@pytest.fixture
+def metrics() -> PerfMetrics:
+    """Metrics collector for tracking performance."""
+    return PerfMetrics()
+
+
+@pytest.fixture(scope="session")
+def dicom_sender(perf_config: PerfConfig) -> DicomSender:
+    """DICOM sender for C-STORE operations."""
+    return DicomSender(
+        endpoint=perf_config.endpoint,
+        load_profile=perf_config.load_profile,
+    )
+
+
+# Legacy fixtures for backward compatibility
+@pytest.fixture(scope="session")
+def compass_config(perf_config):
+    """Configuration for Compass server connection (legacy compatibility)."""
+    return {
+        'host': perf_config.endpoint.host,
+        'port': perf_config.endpoint.port,
+        'ae_title': perf_config.endpoint.remote_ae_title,
+        'local_ae_title': perf_config.endpoint.local_ae_title
+    }
 
 
 @pytest.fixture
 def send_dicom_func():
-    """Returns the send_dicom function from the project."""
+    """Returns the send_dicom function from the project (legacy compatibility)."""
     from dicomsourceeval_send_dicom_cstore import send_dicom
     return send_dicom

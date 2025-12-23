@@ -165,11 +165,12 @@ class DicomSender:
         ae = self._build_ae()
         # Verification is already included in _build_ae(), no need to append again
         try:
+            # Note: associate() doesn't take timeout parameter in some pynetdicom versions
+            # Use acse_timeout network option instead
             assoc = ae.associate(
                 self.endpoint.host,
                 self.endpoint.port,
                 ae_title=self.endpoint.remote_ae_title.encode("ascii", "ignore"),
-                timeout=timeout_seconds,
             )
             if not assoc.is_established:
                 return False

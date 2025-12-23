@@ -289,3 +289,63 @@ def get_files_by_modality(dicom_by_modality: dict, modality: str, count: int = N
         pytest.skip(f"Need {count} {modality} files, only {len(files)} available")
     
     return files[:count] if count else files
+
+
+@pytest.fixture
+def test_dicom_with_attributes(single_dicom_file):
+    """
+    Factory fixture to create test DICOM files with specific attributes.
+    
+    This fixture returns a function that creates DICOM files with custom
+    attributes for transformation testing.
+    
+    Usage:
+        test_file_path, dataset = test_dicom_with_attributes(
+            modality='OPV',
+            series_description='GPA',
+            patient_id='TEST123'
+        )
+    
+    Returns:
+        Function that takes **kwargs and returns (file_path, dataset) tuple
+    """
+    import tempfile
+    from pydicom.uid import generate_uid
+    
+    def _create_test_file(**attributes):
+        """
+        Create a DICOM file with specified attributes.
+        
+        Args:
+            **attributes: DICOM attributes in snake_case or PascalCase
+                         (e.g., modality='CT' or Modality='CT')
+        
+        Returns:
+            Tuple of (file_path, dataset)
+        """
+        ds = load_dataset(single_dicom_file)
+        
+        # Apply custom attributes
+        for attr, value in attributes.items():
+            # Support both snake_case and PascalCase
+            if '_' in attr:
+                # Convert snake_case to PascalCase
+                dicom_attr = ''.join(word.capitalize() for word in attr.split('_'))
+            else:
+                dicom_attr = attr
+            
+            setattr(ds, dicom_attr, value)
+        
+        # Generate unique UIDs to ensure each test is independent
+        ds.StudyInstanceUID = generate_uid()
+        ds.SeriesInstanceUID = generate_uid()
+        ds.SOPInstanceUID = generate_uid()
+        
+        # Save to temp file
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.dcm', prefix='test_transform_')
+        os.close(temp_fd)
+        ds.save_as(temp_path)
+        
+        return temp_path, ds
+    
+    return _create_test_file

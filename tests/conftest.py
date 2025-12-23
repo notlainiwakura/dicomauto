@@ -87,3 +87,205 @@ def send_dicom_func():
     """Returns the send_dicom function from the project (legacy compatibility)."""
     from dicomsourceeval_send_dicom_cstore import send_dicom
     return send_dicom
+
+
+# ============================================================================
+# Test Data Selection Fixtures
+# ============================================================================
+
+@pytest.fixture(scope="session")
+def large_dicom_file(dicom_files: List[Path]):
+    """
+    Select a large DICOM file (>10MB) for testing.
+    Gracefully skips if no large file is available.
+    """
+    large_threshold_bytes = 10 * 1024 * 1024  # 10MB
+    
+    for file in dicom_files:
+        if file.stat().st_size > large_threshold_bytes:
+            file_size_mb = file.stat().st_size / (1024 * 1024)
+            print(f"\n[INFO] Selected large file: {file.name} ({file_size_mb:.2f}MB)")
+            return file
+    
+    pytest.skip(f"No large DICOM file (>10MB) found in dataset. "
+                f"Available files: {len(dicom_files)}")
+
+
+@pytest.fixture(scope="session")
+def small_dicom_files(dicom_files: List[Path]):
+    """
+    Select up to 10 small DICOM files (<1MB) for batch testing.
+    Gracefully skips if fewer than 3 small files available.
+    """
+    small_threshold_bytes = 1 * 1024 * 1024  # 1MB
+    min_required = 3
+    max_returned = 10
+    
+    small_files = [f for f in dicom_files if f.stat().st_size < small_threshold_bytes]
+    
+    if len(small_files) < min_required:
+        pytest.skip(f"Need at least {min_required} small files (<1MB), "
+                    f"only found {len(small_files)}")
+    
+    selected = small_files[:max_returned]
+    total_size_mb = sum(f.stat().st_size for f in selected) / (1024 * 1024)
+    print(f"\n[INFO] Selected {len(selected)} small files (total: {total_size_mb:.2f}MB)")
+    return selected
+
+
+@pytest.fixture(scope="session")
+def medium_dicom_files(dicom_files: List[Path]):
+    """
+    Select medium-sized DICOM files (1MB - 10MB) for testing.
+    Gracefully skips if no medium files available.
+    """
+    min_size = 1 * 1024 * 1024  # 1MB
+    max_size = 10 * 1024 * 1024  # 10MB
+    
+    medium_files = [f for f in dicom_files 
+                    if min_size <= f.stat().st_size <= max_size]
+    
+    if not medium_files:
+        pytest.skip(f"No medium-sized DICOM files (1-10MB) found. "
+                    f"Total files available: {len(dicom_files)}")
+    
+    print(f"\n[INFO] Found {len(medium_files)} medium-sized files")
+    return medium_files
+
+
+@pytest.fixture(scope="session")
+def dicom_by_modality(dicom_files: List[Path]):
+    """
+    Organize DICOM files by modality (CT, MR, CR, etc.).
+    Returns dict: {modality: [files]}
+    
+    Usage with parametrize:
+        @pytest.mark.parametrize("modality", ["CT", "MR", "CR"])
+        def test_by_modality(dicom_by_modality, modality):
+            if modality not in dicom_by_modality:
+                pytest.skip(f"No {modality} files available")
+            files = dicom_by_modality[modality]
+    """
+    by_modality = {}
+    skipped_files = 0
+    
+    for file in dicom_files:
+        try:
+            ds = load_dataset(file)
+            modality = ds.Modality if hasattr(ds, 'Modality') else 'UNKNOWN'
+            
+            if modality not in by_modality:
+                by_modality[modality] = []
+            by_modality[modality].append(file)
+        except Exception as e:
+            skipped_files += 1
+            print(f"\n[WARNING] Could not read modality from {file.name}: {e}")
+    
+    if not by_modality:
+        pytest.skip("Could not determine modality for any files")
+    
+    print(f"\n[INFO] Files organized by modality:")
+    for modality, files in sorted(by_modality.items()):
+        print(f"  - {modality}: {len(files)} files")
+    
+    if skipped_files > 0:
+        print(f"  - Skipped: {skipped_files} files (read errors)")
+    
+    return by_modality
+
+
+@pytest.fixture(scope="session")
+def dicom_by_size_category(dicom_files: List[Path]):
+    """
+    Organize DICOM files into size categories.
+    Returns dict: {'small': [files], 'medium': [files], 'large': [files]}
+    """
+    categories = {
+        'small': [],   # <1MB
+        'medium': [],  # 1-10MB
+        'large': []    # >10MB
+    }
+    
+    for file in dicom_files:
+        size_mb = file.stat().st_size / (1024 * 1024)
+        
+        if size_mb < 1:
+            categories['small'].append(file)
+        elif size_mb <= 10:
+            categories['medium'].append(file)
+        else:
+            categories['large'].append(file)
+    
+    print(f"\n[INFO] Files by size category:")
+    for category, files in categories.items():
+        if files:
+            total_mb = sum(f.stat().st_size for f in files) / (1024 * 1024)
+            print(f"  - {category}: {len(files)} files ({total_mb:.2f}MB total)")
+    
+    return categories
+
+
+@pytest.fixture(scope="session")
+def single_dicom_file(dicom_files: List[Path]):
+    """
+    Select a single representative DICOM file.
+    Gracefully skips if no files available.
+    
+    Useful for simple integration tests that just need any valid file.
+    """
+    if not dicom_files:
+        pytest.skip("No DICOM files available for testing")
+    
+    file = dicom_files[0]
+    size_mb = file.stat().st_size / (1024 * 1024)
+    print(f"\n[INFO] Using single file: {file.name} ({size_mb:.2f}MB)")
+    return file
+
+
+@pytest.fixture
+def dicom_file_subset(dicom_files: List[Path], request):
+    """
+    Parametrizable fixture for selecting N files.
+    
+    Usage:
+        @pytest.mark.parametrize("dicom_file_subset", [5, 10, 20], indirect=True)
+        def test_batch(dicom_file_subset):
+            assert len(dicom_file_subset) == expected_count
+    """
+    count = request.param if hasattr(request, 'param') else 5
+    
+    if len(dicom_files) < count:
+        pytest.skip(f"Need {count} files, only {len(dicom_files)} available")
+    
+    subset = dicom_files[:count]
+    print(f"\n[INFO] Selected subset of {len(subset)} files")
+    return subset
+
+
+# ============================================================================
+# Utility Functions for Tests
+# ============================================================================
+
+def get_files_by_modality(dicom_by_modality: dict, modality: str, count: int = None):
+    """
+    Helper to get files for a specific modality with graceful fallback.
+    
+    Args:
+        dicom_by_modality: Dict from dicom_by_modality fixture
+        modality: Modality code (e.g., 'CT', 'MR')
+        count: Number of files to return (None = all)
+    
+    Returns:
+        List of files, or skips test if modality not available
+    """
+    if modality not in dicom_by_modality:
+        available = ", ".join(dicom_by_modality.keys())
+        pytest.skip(f"Modality '{modality}' not available. "
+                    f"Available: {available}")
+    
+    files = dicom_by_modality[modality]
+    
+    if count and len(files) < count:
+        pytest.skip(f"Need {count} {modality} files, only {len(files)} available")
+    
+    return files[:count] if count else files
